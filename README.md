@@ -49,7 +49,7 @@ The engine operates on a **Generator-Critic-Editor** pattern:
 
 ```text
 socratic-ed-forge/
-├── data/               # Input JSONs and generated outputs
+├── data/               # Input JSONs and generated outputs (Ignored by Git)
 ├── frontend/           # Streamlit Dashboard
 ├── src/
 │   ├── agents/         # Agent logic (Generator, Critic, etc.)

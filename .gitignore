@@ -40,6 +40,9 @@ data/output/
 data/logs.txt
 data/status.txt
 data/input/*.json
+data/learning_loop/errors/
+data/learning_loop/fixes/
+data/telemetry.json
 
 # OS specific
 .DS_Store
