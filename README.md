@@ -5,21 +5,23 @@
 Using a sophisticated **Reflective Loop** (Generator $\rightarrow$ Critic $\rightarrow$ Editor), the engine ensures that every module produced meets strict academic standards for technical accuracy, depth, and structural integrity.
 
 ## ✨ Key Features
-
-* **Reflective Agentic Loop:** Employs a multi-agent architecture where a **Critic** challenges the **Generator**, and an **Editor** refines the content based on feedback.
+## ✨ Key Features
+* **Reflective Agentic Loop:** Employs a multi-agent architecture where a **Critic** challenges the **Generator**, a **Fact-Checker** audits technical accuracy, and an **Editor** refines the content.
 * **Librarian Agent:** A specialized structural auditor that ensures Markdown hierarchy and Table of Contents are perfectly aligned.
 * **RPM-Aware Pacing:** Intelligent exponential backoff and jitter implementation to handle API rate limits (e.g., Gemini Free Tier) gracefully.
+* **Self-Learning Mechanism:** Uses an "Experience Replay" loop where errors and fixes are recorded and injected back into agent prompts to prevent repetition.
 * **Professional Dashboard:** A dual-pane Streamlit interface providing real-time agent logs and a live Markdown preview.
 * **Textbook-Grade Output:** Enforced academic tone and structured Markdown hierarchy (`#`, `##`, `###`).
 
 ## 🏗️ Architecture
 
-The engine operates on a **Generator-Critic-Editor** pattern:
+The engine operates on a sophisticated **multi-stage validation pipeline**:
 
 1.  **Generator:** Drafts the initial technical content based on the input schema.
-2.  **Critic:** Audits the draft for technical accuracy and academic depth.
-3.  **Editor:** Rewrites the draft to address the Critic's specific feedback.
-4.  **Librarian:** Performs a final pass to ensure structural integrity.
+2.  **Critic:** Audits the draft for technical accuracy, academic tone, and depth of explanation.
+3.  **Fact-Checker:** If the Critic approves, this agent performs a deep audit to identify technical hallucinations or incorrect code.
+4.  **Editor:** If either the Critic or Fact-Checker identifies issues, the Editor rewrites the draft based on specific feedback.
+5.  **Librarian:** Performs a final pass on the complete book to ensure structural integrity and Markdown correctness.
 
 ## 🛠️ Installation
 
