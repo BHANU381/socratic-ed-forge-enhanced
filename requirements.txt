@@ -2,3 +2,6 @@ google-genai
 python-dotenv
 streamlit
 pytest
+fastapi
+uvicorn[standard]
+python-multipart

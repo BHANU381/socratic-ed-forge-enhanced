@@ -1,0 +1,448 @@
+{
+    "rules": [
+        {
+            "id": "rule_01",
+            "text": "Ensure numpy is imported as np.",
+            "count": 2,
+            "last_updated": "2026-06-12T00:01:47.777043"
+        },
+        {
+            "id": "rule_02",
+            "text": "Use only level three (###) or lower headers for all document section titles.",
+            "count": 16,
+            "last_updated": "2026-06-12T00:15:30.854522"
+        },
+        {
+            "id": "rule_03",
+            "text": "Synthesize summaries, eliminate redundant definitions, constrain section proportions, and ensure technical documentation includes all constants.",
+            "count": 15,
+            "last_updated": "2026-06-12T10:29:13.449955"
+        },
+        {
+            "id": "rule_04",
+            "text": "Restrict documents to four primary headers, use objective language, and prioritize robust narrative content.",
+            "count": 7,
+            "last_updated": "2026-06-12T17:00:04.962746"
+        },
+        {
+            "id": "rule_05",
+            "text": "Exclude programming code blocks and avoid overused, formulaic jargon in non-technical curriculum contexts.",
+            "count": 3,
+            "last_updated": "2026-06-12T16:34:00.682749"
+        },
+        {
+            "id": "rule_06",
+            "text": "Mandatorily include a practical, non-code activity that applies core concepts within the application section.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:41:19.140740"
+        },
+        {
+            "id": "rule_07",
+            "text": "Ensure all consecutive model evaluations use stateless requests or cleared session history.",
+            "count": 1,
+            "last_updated": "2026-06-12T00:09:04.698968"
+        },
+        {
+            "id": "rule_08",
+            "text": "Use precise technical terminology, maintain an analytical tone, and explicitly distinguish internal probability from reliability.",
+            "count": 3,
+            "last_updated": "2026-06-12T16:26:15.864571"
+        },
+        {
+            "id": "rule_09",
+            "text": "Ensure practical sections require programmatic implementation and code-based solutions rather than manual research tasks.",
+            "count": 1,
+            "last_updated": "2026-06-12T00:10:57.852180"
+        },
+        {
+            "id": "rule_10",
+            "text": "Use only tertiary headers, maintain objective tone, avoid formulaic phrases, and frame code conceptually.",
+            "count": 3,
+            "last_updated": "2026-06-12T00:16:11.258872"
+        },
+        {
+            "id": "rule_11",
+            "text": "Restrict headers to mandatory sections, embed concrete implementation examples, and link to capstone projects.",
+            "count": 2,
+            "last_updated": "2026-06-12T00:13:21.107784"
+        },
+        {
+            "id": "rule_12",
+            "text": "Align curriculum content strictly with defined architectural frameworks, specific assessment criteria, and required terminology.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:58:15.035231"
+        },
+        {
+            "id": "rule_13",
+            "text": "Restrict definitions to core sections, include practical examples, and provide step-by-step implementation exercises.",
+            "count": 1,
+            "last_updated": "2026-06-12T00:14:29.104419"
+        },
+        {
+            "id": "rule_14",
+            "text": "Always decouple agent reasoning from the external governance harness and define clear mastery evidence.",
+            "count": 1,
+            "last_updated": "2026-06-12T00:15:59.831567"
+        },
+        {
+            "id": "rule_15",
+            "text": "Include all required content, avoid sub-headers, prevent concept repetition, and integrate code-based implementation exercises.",
+            "count": 4,
+            "last_updated": "2026-06-12T16:29:07.976171"
+        },
+        {
+            "id": "rule_16",
+            "text": "Specify fire classifications, extinguisher limitations, and distinguish immediate rescue actions from preventive maintenance procedures.",
+            "count": 2,
+            "last_updated": "2026-06-12T09:24:15.119148"
+        },
+        {
+            "id": "rule_17",
+            "text": "Eliminate formulaic corporate jargon, enforce section word limits, and strictly align content with curriculum objectives.",
+            "count": 9,
+            "last_updated": "2026-06-12T16:35:52.461261"
+        },
+        {
+            "id": "rule_18",
+            "text": "Avoid phrases like serves as the foundation, include technical limitations, and specify additive caveats.",
+            "count": 1,
+            "last_updated": "2026-06-12T09:25:27.992116"
+        },
+        {
+            "id": "rule_19",
+            "text": "Separate theoretical mechanisms from procedural workflows, eliminate redundant filler, and include all required parameters.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:36:08.126470"
+        },
+        {
+            "id": "rule_20",
+            "text": "Use validated depth gauges or reference bars, avoid oil, and define meaningful measurement tolerances.",
+            "count": 2,
+            "last_updated": "2026-06-12T10:23:36.039929"
+        },
+        {
+            "id": "rule_21",
+            "text": "Use precise technical terminology, mandate equipment calibration over manual correction, and correctly identify measurement errors.",
+            "count": 4,
+            "last_updated": "2026-06-12T17:00:40.036605"
+        },
+        {
+            "id": "rule_22",
+            "text": "Explicitly mandate a storage gap between micrometer faces to prevent corrosion and surface damage.",
+            "count": 1,
+            "last_updated": "2026-06-12T10:25:07.246390"
+        },
+        {
+            "id": "rule_23",
+            "text": "Distinguish between main scale and sub-scale graduations and specify precise mechanical storage positions.",
+            "count": 1,
+            "last_updated": "2026-06-12T10:25:30.624941"
+        },
+        {
+            "id": "rule_24",
+            "text": "Verify technical accuracy of hardware terminology and scale positioning against official engineering reference standards.",
+            "count": 2,
+            "last_updated": "2026-06-12T10:27:11.703099"
+        },
+        {
+            "id": "rule_25",
+            "text": "Qualify technical specifications, document all scale-reading variables, and mandate pre-use equipment verification procedures.",
+            "count": 1,
+            "last_updated": "2026-06-12T10:27:47.270065"
+        },
+        {
+            "id": "rule_26",
+            "text": "Place maintenance procedures exclusively in dedicated sections and limit section length to prescribed proportions.",
+            "count": 1,
+            "last_updated": "2026-06-12T10:28:12.726156"
+        },
+        {
+            "id": "rule_27",
+            "text": "Eliminate tables, avoid formulaic professional jargon, and restrict introductions to high-level thematic importance.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:59:09.102184"
+        },
+        {
+            "id": "rule_28",
+            "text": "Replace theoretical descriptions with concrete, actionable steps and avoid prohibited terminology.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:37:58.466765"
+        },
+        {
+            "id": "rule_29",
+            "text": "Use single-hash headers, avoid forbidden terminology, maintain strict semantic context, and prohibit summary repetition.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:22:44.895116"
+        },
+        {
+            "id": "rule_30",
+            "text": "Strictly adhere to specified formatting constraints, eliminate prohibited terminology, and ensure content remains purely instructional.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:23:55.250410"
+        },
+        {
+            "id": "rule_31",
+            "text": "Exclude prohibited phrases, maintain clinical tone, and omit code blocks entirely.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:24:02.897653"
+        },
+        {
+            "id": "rule_32",
+            "text": "Exclude conceptual definitions from introductions and mandate explicit comparative summaries of required stack components.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:24:35.082411"
+        },
+        {
+            "id": "rule_33",
+            "text": "Adhere strictly to four headings, exclude prohibited terminology, and incorporate all mandatory feature requirements.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:24:55.866767"
+        },
+        {
+            "id": "rule_34",
+            "text": "Prioritize actionable, technical requirements over abstract narrative descriptions to ensure implementation precision.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:25:24.337151"
+        },
+        {
+            "id": "rule_35",
+            "text": "Integrate the slider tool, remove formulaic phrases, and maintain exactly four main headers.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:26:08.163005"
+        },
+        {
+            "id": "rule_36",
+            "text": "Categorize features via slider tool, strictly avoiding prohibited phrases and purely theoretical descriptive text.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:26:39.906477"
+        },
+        {
+            "id": "rule_37",
+            "text": "Eliminate tutorial-style instructions and prohibited metaphors; prioritize objective, descriptive, academic terminology throughout the text.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:27:06.737134"
+        },
+        {
+            "id": "rule_38",
+            "text": "Embed required assets as text and include explicit trade-off analysis within all technical specifications.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:27:14.731758"
+        },
+        {
+            "id": "rule_39",
+            "text": "Remove redundant theory, eliminate sub-header punctuation, and detail AI\u2019s specific stack recommendation logic.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:27:22.038884"
+        },
+        {
+            "id": "rule_40",
+            "text": "Replace all procedural introductions with direct imperatives to eliminate fluff and prohibited terminology.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:28:06.945964"
+        },
+        {
+            "id": "rule_41",
+            "text": "Base all design decisions on quantifiable user behavior and objectives rather than subjective preference.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:28:14.793920"
+        },
+        {
+            "id": "rule_42",
+            "text": "Mandate adherence to specific prompt-defined technical features and precise formatting constraints in all submissions.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:28:45.145222"
+        },
+        {
+            "id": "rule_43",
+            "text": "Remove prohibited phrases, avoid redundancy, ensure required content inclusion, and use bold styling headers.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:38:56.472205"
+        },
+        {
+            "id": "rule_44",
+            "text": "Strictly eliminate all repetitive definitions and prohibited phrases while avoiding unnecessary code block usage.",
+            "count": 4,
+            "last_updated": "2026-06-12T16:32:02.147212"
+        },
+        {
+            "id": "rule_45",
+            "text": "Verify all structural, stylistic, and behavioral dependencies before modifying any interface component.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:30:00.200076"
+        },
+        {
+            "id": "rule_46",
+            "text": "Avoid corporate tropes; use precise architectural terminology and maintain a strict narrative, non-list format.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:30:16.116593"
+        },
+        {
+            "id": "rule_47",
+            "text": "Remove H1/H2 headers, eliminate formulaic phrases, and ensure summaries contain only unique new insights.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:31:44.236106"
+        },
+        {
+            "id": "rule_48",
+            "text": "Omit code blocks and jargon, strictly adhere to header formatting, and include mandatory follow-up questions.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:32:18.645364"
+        },
+        {
+            "id": "rule_49",
+            "text": "Include required AI-generated SQL code blocks while strictly avoiding prohibited formulaic business jargon.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:32:33.649731"
+        },
+        {
+            "id": "rule_50",
+            "text": "Prioritize modular component integration through incremental, validated development steps, avoiding jargon and structural nesting.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:33:00.735109"
+        },
+        {
+            "id": "rule_51",
+            "text": "Map user requirements to n8n email workflows using strictly defined AI system development roles.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:33:15.173061"
+        },
+        {
+            "id": "rule_52",
+            "text": "Align content strictly with source constraints and maintain curriculum structure without adding external requirements.",
+            "count": 3,
+            "last_updated": "2026-06-12T17:02:36.682150"
+        },
+        {
+            "id": "rule_53",
+            "text": "Eliminate all redundant feature lists and marketing-style adjectives to ensure purely analytical, non-repetitive documentation.",
+            "count": 5,
+            "last_updated": "2026-06-12T17:02:13.631137"
+        },
+        {
+            "id": "rule_54",
+            "text": "Prioritize precise, technical language and avoid repetitive phrasing to maintain professional brevity and clarity.",
+            "count": 2,
+            "last_updated": "2026-06-12T17:03:05.849494"
+        },
+        {
+            "id": "rule_55",
+            "text": "Maintain academic prose, exclude implementation specifics, and synthesize findings without repeating core procedural steps.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:35:10.076818"
+        },
+        {
+            "id": "rule_56",
+            "text": "Draft concise content strictly excluding core concept definitions, prohibited phrases, and code blocks.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:35:25.425714"
+        },
+        {
+            "id": "rule_57",
+            "text": "Link AI analysis of diffs to risk identification while strictly separating introduction from concepts.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:36:19.698836"
+        },
+        {
+            "id": "rule_58",
+            "text": "Demonstrate AI threat mapping and fail-closed implementation through descriptive, non-code procedural explanations.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:36:49.577504"
+        },
+        {
+            "id": "rule_59",
+            "text": "Mandate specific code examples and rigorous formatting for all actionable security checklists.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:37:06.289300"
+        },
+        {
+            "id": "rule_60",
+            "text": "Integrate application context naturally and replace unauthorized code blocks with standard bulleted lists.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:37:46.635969"
+        },
+        {
+            "id": "rule_61",
+            "text": "Eliminate all header syntax, replace jargon with academic terminology, and exclude code-like formatting.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:38:14.795775"
+        },
+        {
+            "id": "rule_62",
+            "text": "Mandate explicit AI tasks for configuration, comparison, and documentation while avoiding prohibited phrasing.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:38:36.915412"
+        },
+        {
+            "id": "rule_63",
+            "text": "Adhere strictly to permitted structural headers, mandatory content requirements, and descriptive, non-formulaic technical prose.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:55:11.241029"
+        },
+        {
+            "id": "rule_64",
+            "text": "Prioritize data source selection while eliminating formulaic phrasing, redundant definitions, and prohibited code formatting.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:41:03.450094"
+        },
+        {
+            "id": "rule_65",
+            "text": "Eliminate formulaic transitions and nested lists to maintain strict professional stylistic compliance.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:41:56.186832"
+        },
+        {
+            "id": "rule_66",
+            "text": "Restrict content to requested headers and excise redundant theoretical explanations or forbidden terminology.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:42:42.736191"
+        },
+        {
+            "id": "rule_67",
+            "text": "Prohibit code blocks and sub-lists to maintain strict adherence to authorized structural requirements.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:55:53.456365"
+        },
+        {
+            "id": "rule_68",
+            "text": "Strictly adhere to curriculum definitions; exclude unsupported classifications and clinical medical procedures.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:56:06.315451"
+        },
+        {
+            "id": "rule_69",
+            "text": "Exclude tables and bulleted lists; ensure workshop exercises remain distinct from core conversion instructions.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:56:47.654081"
+        },
+        {
+            "id": "rule_70",
+            "text": "Require independent trials and analysis of variance, rather than averaging fixed-position measurements.",
+            "count": 2,
+            "last_updated": "2026-06-12T16:57:28.646010"
+        },
+        {
+            "id": "rule_71",
+            "text": "Require tactile drag calibration and scale-mark alignment, avoiding physical end-stops and gravity-based settings.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:58:49.542248"
+        },
+        {
+            "id": "rule_72",
+            "text": "Verify technical claims against instrument function and include concrete examples for all mandated calculations.",
+            "count": 1,
+            "last_updated": "2026-06-12T16:59:36.749665"
+        },
+        {
+            "id": "rule_73",
+            "text": "Loosen the primary slider lock before engaging the fine adjustment mechanism to ensure precision.",
+            "count": 1,
+            "last_updated": "2026-06-12T17:01:09.935302"
+        },
+        {
+            "id": "rule_74",
+            "text": "Strictly limit content to provided curriculum; omit external technical specifications and unverified procedural steps.",
+            "count": 2,
+            "last_updated": "2026-06-12T17:03:40.462003"
+        }
+    ]
+}
