@@ -206,6 +206,12 @@ class Librarian(AgentBase):
                              full_content=full_content)
         return self._run_with_retry(prompt)
 
+class InternalLibrarian(AgentBase):
+    def audit_draft(self, content):
+        prompt = load_prompt("internal_librarian.md", 
+                             content=content)
+        return self._run_with_retry(prompt)
+
 class FactChecker(AgentBase):
     def check_facts(self, content, content_context):
         prompt = load_prompt("fact_checker.md", 

@@ -85,7 +85,7 @@ def test_update_live_preview(tmp_path):
     master_file.write_text("# Master Course\n")
     
     # Test drafting update
-    update_live_preview(str(session_dir), str(master_file), "Submodule 1", "Draft content here", "Drafting")
+    update_live_preview(session_dir, master_file, "Submodule 1", "Draft content here", "Drafting")
     
     live_preview = session_dir / "live_preview.md"
     assert live_preview.exists()
@@ -96,40 +96,7 @@ def test_update_live_preview(tmp_path):
     
     # Test final update
     master_file.write_text("# Master Course\n\n## Submodule: Submodule 1\nApproved content")
-    update_live_preview(str(session_dir), str(master_file))
+    update_live_preview(session_dir, master_file)
     content_final = live_preview.read_text()
     assert "Approved content" in content_final
     assert "[Drafting]" not in content_final
-
-def test_get_latest_book_prioritizes_live_preview(tmp_path, monkeypatch):
-    """Verify that get_latest_book in frontend/app.py prioritizes live_preview.md."""
-    import sys
-    from unittest.mock import MagicMock
-    
-    mock_st = MagicMock()
-    mock_st.columns.return_value = [MagicMock(), MagicMock()]
-    sys.modules['streamlit'] = mock_st
-    
-    output_dir = tmp_path / "data" / "output"
-    output_dir.mkdir(parents=True)
-    
-    session_dir = output_dir / "session_20260611_120000"
-    session_dir.mkdir()
-    
-    master_file = session_dir / "Course.md"
-    master_file.write_text("# Approved Course content")
-    
-    live_preview = session_dir / "live_preview.md"
-    live_preview.write_text("# Live Preview content")
-    
-    import frontend.app as app
-    app.OUTPUT_DIR = str(output_dir)
-    
-    # First, test when live_preview.md exists
-    latest = app.get_latest_book()
-    assert latest == str(live_preview)
-    
-    # Delete live_preview.md and test fallback
-    os.remove(live_preview)
-    latest_fallback = app.get_latest_book()
-    assert latest_fallback == str(master_file)

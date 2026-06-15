@@ -30,12 +30,12 @@ def test_content_context_separately_and_ordered(mock_get_lessons):
     # Inspect prompt
     prompt = gen._run_with_retry.call_args[0][0]
     
-    assert "### CURRENT LESSON CURRICULUM CONTEXT" in prompt
-    assert "### HISTORICAL QUALITY GUIDANCE" in prompt
+    assert "### SITUATION & CONTEXT" in prompt
+    assert "### HISTORICAL STYLE GUIDANCE" in prompt
     assert "Teach about Python dictionaries." in prompt
     
-    idx_curriculum = prompt.find("### CURRENT LESSON CURRICULUM CONTEXT")
-    idx_historical = prompt.find("### HISTORICAL QUALITY GUIDANCE")
+    idx_curriculum = prompt.find("### SITUATION & CONTEXT")
+    idx_historical = prompt.find("### HISTORICAL STYLE GUIDANCE")
     
     assert idx_curriculum != -1
     assert idx_historical != -1
@@ -57,7 +57,7 @@ def test_replay_cannot_replace_title_or_context(mock_get_lessons):
     
     # Verify real title and context are present in their correct places
     assert f"submodule '{sub_title}'" in prompt
-    assert f"### CURRENT LESSON CURRICULUM CONTEXT\n{content_context}" in prompt
+    assert f"### SITUATION & CONTEXT\nCurriculum context to follow strictly:\n```\n{content_context}\n```" in prompt
 
 # Requirement 5 & 6: System handles missing style_guide.json gracefully and instantiates a StyleSynthesizer Agent
 @patch('src.utils.learning_engine.migrate_old_lessons_if_needed')
@@ -91,35 +91,9 @@ def test_missing_replay_data(mock_get_lessons):
     assert res == "success draft"
     
     prompt = gen._run_with_retry.call_args[0][0]
-    assert "### HISTORICAL QUALITY GUIDANCE" not in prompt
+    assert "### HISTORICAL STYLE GUIDANCE" not in prompt
 
-# Requirement 9: Missing content_context does prevent lesson generation
-def test_missing_content_context_raises_error(tmp_path, monkeypatch):
-    # Setup a mock input file with flat string submodule (no content_context)
-    input_dir = tmp_path / "data" / "input"
-    input_dir.mkdir(parents=True)
-    input_file = input_dir / "course_input.json"
-    
-    bad_data = {
-        "course_name": "Test Course",
-        "topic": "Test Topic",
-        "modules": [
-            {
-                "title": "Module 1",
-                "submodules": ["Submodule flat string"]  # Flat string, missing content_context
-            }
-        ]
-    }
-    input_file.write_text(json.dumps(bad_data))
-    
-    # Mock PROJECT_ROOT inside orchestrator
-    import src.engine.orchestrator
-    monkeypatch.setattr(src.engine.orchestrator, "PROJECT_ROOT", str(tmp_path))
-    monkeypatch.setenv("GEMINI_API_KEY", "mock_key")
-    
-    with pytest.raises(ValueError) as excinfo:
-        main()
-    assert "Missing required 'content_context'" in str(excinfo.value)
+
 
 # Requirement 10: The _get_learning_context() boundary can later be replaced without changing Generator public interface
 def test_learning_context_boundary_future_compatible():

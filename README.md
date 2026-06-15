@@ -16,8 +16,9 @@ Using a sophisticated **Reflective Loop** (Generator $\rightarrow$ Critic $\righ
 * **Context-Grounded Generation:** Grounded lesson generation driven by a structured submodule schema containing both `title` and `content_context` (Curriculum Context).
 * **Reflective Agentic Loop:** Employs a multi-agent architecture where a **Critic** challenges the **Generator**, a **Fact-Checker** audits technical accuracy, and an **Editor** refines the content.
 * **Topic Isolation & Heading Deduplication:** Ensures submodules do not leak context into each other and programmatically sanitizes top-level headings to prevent duplicate formatting.
-* **Librarian Agent:** A specialized structural auditor that ensures Markdown hierarchy and Table of Contents are perfectly aligned.
-
+* **Dual-Librarian Architecture:** An **Internal Librarian** operates within the loop to enforce strict markdown compliance per submodule, and a **Global Librarian** performs a full-book parse at the end of the course to verify global structure and Table of Contents.
+* **Automated Testing Suite:** Comprehensive suite of Mocked Unit Tests (free, fast, token-less) and Integration Tests inside the `tests/` folder using `pytest` and `MagicMock`.
+* **LLM Context Anchors:** Persistent `LLM_CONTEXT.md` documentation acting as the architectural brain for AI agents working on the codebase.
 ## 🏗️ Architecture
 
 The engine operates on a sophisticated **multi-stage validation pipeline**:
@@ -26,8 +27,9 @@ The engine operates on a sophisticated **multi-stage validation pipeline**:
 2.  **Deterministic Validation Gate:** Checks structural layout (headers, duplicates) programmatically.
 3.  **Critic:** Audits the draft for technical accuracy, academic tone, and depth of explanation.
 4.  **Fact-Checker:** If the Critic approves, this agent performs a deep audit to identify technical hallucinations or incorrect code.
-5.  **Editor:** If either the Critic or Fact-Checker identifies issues, the Editor rewrites the draft based on specific feedback.
-6.  **Librarian:** Performs a final pass on the complete book to ensure structural integrity and Markdown correctness.
+5.  **Internal Librarian:** Audits the structural formatting and markdown tags of the draft.
+6.  **Editor:** If the Critic, Fact-Checker, or Internal Librarian identifies issues, the Editor rewrites the draft based on specific feedback.
+7.  **Global Librarian:** Performs a single final pass on the fully compiled book to ensure macroscopic structural integrity and Table of Contents alignment.
 
 ## 🛠️ Installation & Setup
 
@@ -87,7 +89,9 @@ socratic-ed-forge/
 │   ├── engine/         # Task orchestrator and Reflective Loop logic
 │   ├── prompts/        # Modularized Markdown instructions for AI agents
 │   └── utils/          # Real-time console, rate limiters, and file loggers
+├── tests/              # Pytest suite with MagicMock for token-less LLM testing
 ├── wiki/               # Knowledge Architect Markdown DB
+├── LLM_CONTEXT.md      # AI context and architecture rules
 ├── data/               # Output JSONs and generated markdown (Ignored)
 ├── .env                # API Keys
 ├── start.bat           # Easy-start script for Windows

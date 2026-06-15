@@ -12,6 +12,7 @@ from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -117,18 +118,8 @@ def get_log_tail(n=200) -> list[str]:
     except Exception:
         return []
 
-# ── App ───────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Socratic Ed-Forge API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.on_event("startup")
-async def startup_cleanup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
     On every server start: audit the PID file.
     If the saved PID is no longer alive, clean it up so the UI
@@ -144,6 +135,18 @@ async def startup_cleanup():
     # Also remove any leftover stop.flag from a previous session
     try: STOP_FLAG.unlink()
     except FileNotFoundError: pass
+    
+    yield
+
+# ── App ───────────────────────────────────────────────────────────────────────
+app = FastAPI(title="Socratic Ed-Forge API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ── REST Endpoints ────────────────────────────────────────────────────────────
 @app.get("/api/status")
@@ -186,12 +189,22 @@ async def start_pipeline(
     INPUT_DIR.mkdir(parents=True, exist_ok=True)
     file_bytes = await file.read()
     try:
-        json.loads(file_bytes)  # Validate JSON
+        data = json.loads(file_bytes)  # Validate JSON
+        # Validate schema using Pydantic
+        from src.models.schemas import CourseInput
+        CourseInput.model_validate(data)
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+    except Exception as e:
+        from pydantic import ValidationError
+        if isinstance(e, ValidationError):
+            raise HTTPException(status_code=422, detail=f"Schema Validation Failed: {e.errors()}")
+        raise HTTPException(status_code=400, detail=f"Validation error: {e}")
 
     config_path = INPUT_DIR / "course_input.json"
-    config_path.write_bytes(file_bytes)
+    
+    # Non-blocking IO to write the file
+    await asyncio.to_thread(config_path.write_bytes, file_bytes)
 
     # Clean up any leftover stop flag from previous run
     try: STOP_FLAG.unlink()
