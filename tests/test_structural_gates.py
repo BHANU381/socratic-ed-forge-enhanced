@@ -2,6 +2,13 @@ import os
 import pytest
 from src.engine.orchestrator import normalize_draft, validate_draft
 
+DEFAULT_HEADINGS = [
+    "### Introduction",
+    "### Core Concepts",
+    "### Practical Application",
+    "### Summary and Key Takeaways"
+]
+
 def test_normalize_draft_strips_invalid_elements():
     # Setup draft with illegal headings and repeated submodule titles
     draft = """
@@ -25,7 +32,7 @@ def test_normalize_draft_strips_invalid_elements():
     Concise points.
     """
     
-    normalized = normalize_draft(draft, "1.1 Topic Title")
+    normalized = normalize_draft(draft, "1.1 Topic Title", DEFAULT_HEADINGS)
     
     # Assert module and submodule headers are stripped
     assert "# Module" not in normalized
@@ -58,7 +65,7 @@ Hands-on task.
 ### Summary and Key Takeaways
 takeaways list."""
     
-    errors = validate_draft(valid_draft)
+    errors = validate_draft(valid_draft, DEFAULT_HEADINGS)
     assert len(errors) == 0
 
 def test_validate_draft_invalid_headings():
@@ -75,7 +82,7 @@ Deep dive content.
 ### Summary and Key Takeaways
 takeaways list."""
     
-    errors = validate_draft(invalid_draft_1)
+    errors = validate_draft(invalid_draft_1, DEFAULT_HEADINGS)
     assert any("wrong order" in e.lower() for e in errors)
     
     # Illegal high-level headings
@@ -92,7 +99,7 @@ Hands-on task.
 ### Summary and Key Takeaways
 takeaways list."""
     
-    errors = validate_draft(invalid_draft_2)
+    errors = validate_draft(invalid_draft_2, DEFAULT_HEADINGS)
     assert any("Found illegal header level" in e for e in errors)
     
     # Duplicate headings
@@ -111,5 +118,37 @@ Hands-on.
 ### Summary and Key Takeaways
 takeaways."""
     
-    errors = validate_draft(invalid_draft_3)
+    errors = validate_draft(invalid_draft_3, DEFAULT_HEADINGS)
     assert any("appears multiple times" in e for e in errors)
+
+def test_validate_draft_dynamic_headings():
+    custom_headings = [
+        "### The Hook",
+        "### Core Concepts Explained Simply",
+        "### Try It Yourself"
+    ]
+    
+    valid_draft = """### The Hook
+Look at this.
+
+### Core Concepts Explained Simply
+Simple text.
+
+### Try It Yourself
+Do it."""
+
+    errors = validate_draft(valid_draft, custom_headings)
+    assert len(errors) == 0
+    
+    invalid_draft = """### Try It Yourself
+Do it.
+
+### The Hook
+Look at this.
+
+### Core Concepts Explained Simply
+Simple text."""
+    
+    errors_invalid = validate_draft(invalid_draft, custom_headings)
+    assert any("wrong order" in e.lower() for e in errors_invalid)
+    assert any("First line of draft must be exactly '### The Hook'" in e for e in errors_invalid)

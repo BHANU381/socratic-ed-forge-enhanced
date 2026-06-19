@@ -1,0 +1,22 @@
+{
+  "course_name": "Advanced Telepathic Communication with Houseplants",
+  "topic": "Learn how to use your mind to talk to ferns, cacti, and succulents.",
+  "duration_weeks": 2,
+  "prompt_theme": "default",
+  "modules": [
+    {
+      "title": "Module 1: The Fern Frequency",
+      "module_context": "Tuning your brainwaves to match the vibrations of indoor ferns.",
+      "submodules": [
+        {
+          "title": "1.1 Staring intensely at leaves",
+          "content_context": "A 40-minute exercise on how to stare at a leaf until it speaks."
+        },
+        {
+          "title": "1.2 Apologizing to Cacti",
+          "content_context": "How to say sorry to a cactus after bumping into it, using only alpha waves."
+        }
+      ]
+    }
+  ]
+}

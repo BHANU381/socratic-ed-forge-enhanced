@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Terminal } from 'lucide-react'
 
@@ -10,7 +9,7 @@ function classifyLine(line) {
   if (l.includes('editor'))     return 'text-blue-400'
   if (l.includes('librarian'))  return 'text-purple-400'
   if (l.includes('error') || l.includes('critical')) return 'text-red-400 font-semibold'
-  return 'text-slate-400'
+  return 'text-zinc-400'
 }
 
 export function LogsPanel({ logs }) {
@@ -28,27 +27,27 @@ export function LogsPanel({ logs }) {
   }, [logs])
 
   return (
-    <Card className="bg-card border-border/50 shadow-lg flex-1 flex flex-col min-h-0">
-      <CardHeader className="pb-2 pt-3 px-4 flex-shrink-0">
-        <CardTitle className="text-[0.7rem] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
+    <div className="flex-1 flex flex-col min-h-[300px] bg-zinc-950 shrink-0">
+      <div className="flex-shrink-0 px-8 pt-6 pb-4">
+        <h3 className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase flex items-center gap-2">
           <Terminal className="w-3.5 h-3.5" />
           Agent Logs
-        </CardTitle>
-      </CardHeader>
+        </h3>
+      </div>
       
-      <CardContent className="px-4 pb-4 flex-1 min-h-0 relative">
-        <div className="absolute inset-x-4 inset-y-0 bottom-4 rounded-md border border-white/10 bg-black/40 backdrop-blur-sm overflow-hidden">
-          <ScrollArea className="h-full w-full" ref={termRef}>
-            <div className="p-3 pr-6 font-mono text-[0.7rem] leading-relaxed tracking-tight">
+      <div className="flex-1 min-h-0 flex flex-col px-8 pb-8">
+        <div className="flex-1 min-h-0 rounded border border-zinc-800 bg-zinc-900/30 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] flex flex-col">
+          <ScrollArea className="flex-1 h-full w-full" ref={termRef}>
+            <div className="p-4 pr-6 font-mono text-[11px] leading-relaxed tracking-tight">
               {logs.length === 0 ? (
-                <div className="text-slate-500">
-                  <span className="text-cyan-500 mr-2">&gt;</span>
+                <div className="text-zinc-600">
+                  <span className="text-zinc-700 mr-2">&gt;</span>
                   System idle. Upload a JSON config and launch production.
                 </div>
               ) : (
                 logs.map((line, i) => (
                   <div key={i} className={`py-0.5 ${classifyLine(line)}`}>
-                    <span className="text-cyan-500/70 mr-2 select-none">&gt;</span>
+                    <span className="text-zinc-700 mr-2 select-none">&gt;</span>
                     <span className="break-words">{line}</span>
                   </div>
                 ))
@@ -56,7 +55,7 @@ export function LogsPanel({ logs }) {
             </div>
           </ScrollArea>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

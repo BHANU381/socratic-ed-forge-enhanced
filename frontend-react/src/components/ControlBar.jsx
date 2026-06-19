@@ -1,6 +1,4 @@
-import { useState, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useState, useRef, useEffect } from 'react'
 import { Settings2, Play, Square, Trash2, Upload, Loader2 } from 'lucide-react'
 
 export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
@@ -10,7 +8,24 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [error, setError]       = useState(null)
   const [rpm, setRpm]           = useState(15)
   const [tpm, setTpm]           = useState(250000)
+  const [themes, setThemes]     = useState(["default"])
+  const [selectedTheme, setSelectedTheme] = useState("default")
   const fileInputRef            = useRef(null)
+
+  useEffect(() => {
+    async function fetchThemes() {
+      try {
+        const res = await fetch('/api/prompt-themes')
+        if (res.ok) {
+          const data = await res.json()
+          setThemes(data.themes || ["default"])
+        }
+      } catch (e) {
+        console.error("Failed to load themes:", e)
+      }
+    }
+    fetchThemes()
+  }, [])
 
   async function handleStart() {
     if (!file) { setError('Please select a JSON config file first.'); return }
@@ -21,6 +36,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
       fd.append('file', file)
       fd.append('rpm_limit', rpm.toString())
       fd.append('tpm_limit', tpm.toString())
+      fd.append('prompt_theme', selectedTheme)
       const res = await fetch('/api/start', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
@@ -55,22 +71,22 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   }
 
   return (
-    <Card className="bg-card border-border/50 shadow-lg relative">
-      <CardHeader className="pb-3 pt-4 px-4">
-        <CardTitle className="text-[0.7rem] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
+    <div className="flex flex-col p-8 gap-5 shrink-0">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase flex items-center gap-2">
           <Settings2 className="w-3.5 h-3.5" />
           Controls
-        </CardTitle>
-      </CardHeader>
+        </h3>
+      </div>
       
-      <CardContent className="px-4 pb-4 space-y-2">
+      <div className="flex flex-col gap-4">
         {!isRunning && (
           <>
             <label
               className={`flex items-center justify-center border border-dashed rounded-md p-2.5 text-xs font-medium cursor-pointer transition-colors ${
                 file 
-                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20' 
-                  : 'border-border/60 bg-muted/20 text-muted-foreground hover:border-indigo-400 hover:text-indigo-400'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' 
+                  : 'border-border/60 bg-muted/20 text-muted-foreground hover:border-zinc-400 hover:text-zinc-300'
               }`}
               htmlFor="json-upload"
             >
@@ -91,27 +107,49 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
 
             <div className="flex gap-2 w-full">
               <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">RPM Limit</label>
-                <input 
-                  type="number" 
-                  value={rpm} 
-                  onChange={e => setRpm(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-border/60 bg-muted/20 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
-                />
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Prompt Theme</label>
+                <select
+                  value={selectedTheme}
+                  onChange={e => setSelectedTheme(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  {themes.map(t => (
+                    <option key={t} value={t} className="bg-zinc-900 text-zinc-200">{t}</option>
+                  ))}
+                </select>
               </div>
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">TPM Limit</label>
-                <input 
-                  type="number" 
-                  value={tpm} 
-                  onChange={e => setTpm(e.target.value)}
-                  className="flex h-8 w-full rounded-md border border-border/60 bg-muted/20 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-indigo-500"
-                />
+              <div className="flex flex-1 gap-2">
+                <div className="flex-1 flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">RPM</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={rpm} 
+                    onChange={e => setRpm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (['-', '+', 'e', 'E', '.'].includes(e.key)) e.preventDefault();
+                    }}
+                    className="flex h-8 w-full rounded-md border border-border/60 bg-muted/20 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col gap-1">
+                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">TPM</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    value={tpm} 
+                    onChange={e => setTpm(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (['-', '+', 'e', 'E', '.'].includes(e.key)) e.preventDefault();
+                    }}
+                    className="flex h-8 w-full rounded-md border border-border/60 bg-muted/20 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
+                  />
+                </div>
               </div>
             </div>
 
-            <Button 
-              className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-lg shadow-indigo-500/25 transition-all"
+            <button 
+              className="w-full bg-zinc-100 text-zinc-900 hover:bg-white shadow-[0_2px_10px_-3px_rgba(255,255,255,0.1)] transition-all font-semibold tracking-wide text-xs py-2.5 rounded flex items-center justify-center active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleStart}
               disabled={!file || starting}
             >
@@ -120,14 +158,13 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
               ) : (
                 <><Play className="mr-2 h-4 w-4 fill-current" /> Start Production</>
               )}
-            </Button>
+            </button>
           </>
         )}
 
         {isRunning && (
-          <Button 
-            variant="destructive"
-            className="w-full bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/30 transition-all font-semibold animate-pulse hover:animate-none"
+          <button 
+            className="w-full bg-rose-600 hover:bg-rose-500 text-white shadow-[0_2px_10px_-3px_rgba(225,29,72,0.3)] transition-all font-semibold tracking-wide text-xs py-2.5 rounded flex items-center justify-center animate-pulse hover:animate-none active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleStop}
             disabled={stopping}
             title="Stops token spending immediately"
@@ -137,23 +174,22 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
             ) : (
               <><Square className="mr-2 h-4 w-4 fill-current" /> Stop Loop (Kill All)</>
             )}
-          </Button>
+          </button>
         )}
 
-        <Button 
-          variant="outline" 
-          className="w-full border-border/50 bg-muted/20 hover:bg-muted text-muted-foreground text-xs" 
+        <button 
+          className="w-full border border-zinc-800/80 bg-zinc-900/30 hover:bg-zinc-800 text-zinc-400 text-[10px] uppercase tracking-widest font-semibold py-2 rounded transition-all flex items-center justify-center active:scale-[0.98]" 
           onClick={handleClear}
         >
           <Trash2 className="mr-2 h-3.5 w-3.5" /> Clear Logs & Reset
-        </Button>
+        </button>
 
         {error && (
           <div className="text-xs text-red-400 mt-2 p-1 font-medium flex items-start gap-1">
             <span className="mt-0.5">⚠</span> {error}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

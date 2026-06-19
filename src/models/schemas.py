@@ -15,6 +15,7 @@ class CourseInput(BaseModel):
     topic: str
     duration_weeks: int
     modules: List[Module] = Field(default_factory=list)
+    prompt_theme: str = Field("default", pattern=r"^[a-zA-Z0-9_-]+$")
 
 class TelemetryData(BaseModel):
     """
@@ -31,4 +32,18 @@ class TelemetryData(BaseModel):
     current_submodule: str
     last_error_type: str = "None"
     last_error_details: str = ""
+    active_iterations: int = 0
+    passed_1st_iteration: int = 0
+    passed_2nd_iteration: int = 0
+    passed_3rd_iteration: int = 0
+    failed_max_iterations: int = 0
     run_history: List[Any] = Field(default_factory=list)
+
+class EvalResult(BaseModel):
+    eval_name: str
+    passed: bool
+    score: int
+    critical_issues: List[str]
+    minor_issues: List[str]
+    fix_recommendations: List[str]
+    failure_owner: str

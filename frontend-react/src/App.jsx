@@ -5,29 +5,67 @@ import { ControlBar }     from './components/ControlBar.jsx'
 import { AuditAlert }     from './components/AuditAlert.jsx'
 import { PreviewPanel }   from './components/PreviewPanel.jsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 export default function App() {
   const { isRunning, pid, telemetry, logs, preview, isLive, connected } = useStream()
+  const [sidebarWidth, setSidebarWidth] = useState(420)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragRef = useRef(false)
+
+  const handleMouseDown = useCallback((e) => {
+    dragRef.current = true
+    setIsDragging(true)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  const handleMouseMove = useCallback((e) => {
+    if (!dragRef.current) return
+    const newWidth = Math.max(250, Math.min(e.clientX, window.innerWidth * 0.6))
+    setSidebarWidth(newWidth)
+  }, [])
+
+  const handleMouseUp = useCallback(() => {
+    dragRef.current = false
+    setIsDragging(false)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }, [])
+
+  useEffect(() => {
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [handleMouseMove, handleMouseUp])
 
   return (
     <TooltipProvider>
-      {/* Dynamic Glassmorphism Background */}
-      <div className="relative h-screen w-full overflow-hidden bg-background text-foreground flex flex-col">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-900/40 via-background to-background -z-10" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-cyan-900/20 via-transparent to-transparent -z-10" />
-        
+      <div className="relative h-screen w-full overflow-hidden bg-zinc-950 text-zinc-50 flex flex-col font-sans">
         {/* Top bar */}
-        <header className="flex-shrink-0 flex items-center gap-3 px-6 h-14 bg-background/40 backdrop-blur-md border-b border-white/5 shadow-sm z-20">
-          <span className="font-bold tracking-tight text-lg">
-            Socratic <span className="text-cyan-400 drop-shadow-[0_0_8px_rgba(6,182,212,0.5)]">Ed-Forge</span>
+        <header className="flex-shrink-0 flex items-center gap-4 px-6 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50 z-20">
+          <button 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors active:scale-95"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? <PanelLeftOpen className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+          </button>
+          
+          <span className="font-semibold tracking-tight text-xl text-zinc-100 ml-1">
+            Socratic <span className="text-zinc-500 font-light">Ed-Forge</span>
           </span>
-          <span className="text-[0.65rem] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 rounded-full px-2.5 py-0.5 tracking-widest">
+          <span className="text-[10px] font-medium bg-zinc-900 text-zinc-400 border border-zinc-800 rounded-full px-3 py-1 tracking-widest ml-2 shadow-[0_1px_2px_rgba(0,0,0,0.1)] hidden sm:inline-block">
             AI COURSE ENGINE
           </span>
           <div className="flex-1" />
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <span className={`w-2 h-2 rounded-full shadow-[0_0_5px_currentColor] ${!connected ? 'bg-muted text-muted' : isRunning ? 'bg-emerald-500 text-emerald-500 animate-pulse' : 'bg-red-500 text-red-500'}`} />
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+            <span className={`w-2 h-2 rounded-full ${!connected ? 'bg-zinc-700' : isRunning ? 'bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.4)]' : 'bg-rose-500'}`} />
             {!connected
               ? 'Connecting…'
               : isRunning
@@ -36,18 +74,36 @@ export default function App() {
           </div>
         </header>
 
-        {/* Standard Flex Layout (Bulletproof) */}
-        <div className="flex-1 w-full h-full overflow-hidden flex flex-row">
+        {/* Custom Resizable Layout */}
+        <div className="flex-1 w-full h-full overflow-hidden flex flex-row relative z-0">
           {/* Left panel */}
-          <div className="w-[380px] shrink-0 flex flex-col gap-4 bg-background/20 backdrop-blur-sm border-r border-white/5 overflow-y-auto overflow-x-hidden p-5 z-10">
-            <TelemetryPanel telemetry={telemetry} isRunning={isRunning} />
-            <ControlBar isRunning={isRunning} />
-            <AuditAlert telemetry={telemetry} />
-            <LogsPanel logs={logs} />
+          <div 
+            style={{ width: isCollapsed ? '0px' : `${sidebarWidth}px` }}
+            className={`shrink-0 flex flex-col bg-zinc-950 border-r border-zinc-800/50 overflow-y-auto overflow-x-hidden z-10 custom-scrollbar relative ${!isDragging ? 'transition-[width] duration-300 ease-in-out' : ''}`}
+          >
+            <div className="flex flex-col min-w-[250px] min-h-full flex-1">
+              <TelemetryPanel telemetry={telemetry} isRunning={isRunning} />
+              <div className="h-px w-full bg-zinc-800/50 shrink-0" />
+              <ControlBar isRunning={isRunning} />
+              <LogsPanel logs={logs} />
+              <AuditAlert telemetry={telemetry} />
+            </div>
           </div>
 
+          {/* Drag Handle */}
+          {!isCollapsed && (
+            <div 
+              onMouseDown={handleMouseDown}
+              onDoubleClick={() => setIsCollapsed(true)}
+              className="w-1 hover:w-1.5 bg-zinc-800/50 hover:bg-emerald-500/80 transition-all duration-150 ease-in-out active:bg-emerald-400 z-20 cursor-col-resize flex flex-col items-center justify-center shrink-0"
+              title="Drag to resize, double-click to collapse"
+            >
+              <div className="h-8 w-[2px] bg-zinc-600/80 rounded-full pointer-events-none" />
+            </div>
+          )}
+
           {/* Right panel */}
-          <div className="flex-1 flex flex-col overflow-hidden bg-transparent relative z-0 min-w-0">
+          <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950 relative z-0 min-w-0">
             <PreviewPanel preview={preview} isLive={isLive} />
           </div>
         </div>

@@ -82,3 +82,31 @@ def test_start_pipeline_already_running(monkeypatch):
     # We expect a 409 Conflict
     assert response.status_code == 409
     assert "Pipeline already running" in response.json()["detail"]
+
+def test_api_prompt_themes_returns_directories():
+    response = client.get("/api/prompt-themes")
+    assert response.status_code == 200
+    data = response.json()
+    assert "themes" in data
+    assert isinstance(data["themes"], list)
+
+def test_api_start_rejects_invalid_theme_name(monkeypatch):
+    monkeypatch.setattr("backend.server._get_pid", lambda: None)
+    
+    invalid_data = {
+        "course_name": "Test",
+        "topic": "Testing",
+        "duration_weeks": 4,
+        "modules": [],
+        "prompt_theme": "../../../etc" # Invalid path traversal
+    }
+    
+    response = client.post(
+        "/api/start",
+        files={"file": ("course_input.json", json.dumps(invalid_data).encode("utf-8"), "application/json")}
+    )
+    
+    # We expect a 422 Unprocessable Entity due to Pydantic regex validation on prompt_theme
+    assert response.status_code == 422
+    assert "Schema Validation Failed" in response.json()["detail"]
+

@@ -109,12 +109,12 @@ def get_latest_book() -> Optional[Path]:
             return max(md_files, key=lambda p: p.stat().st_mtime)
     return None
 
-def get_log_tail(n=200) -> list[str]:
+def get_log_tail(n: Optional[int] = None) -> list[str]:
     if not LOG_FILE.exists():
         return []
     try:
         lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
-        return lines[-n:]
+        return lines[-n:] if n is not None else lines
     except Exception:
         return []
 
@@ -161,7 +161,7 @@ def get_status():
     return JSONResponse({"is_running": is_running, "pid": pid, "telemetry": tel})
 
 @app.get("/api/logs")
-def get_logs(n: int = 200):
+def get_logs(n: Optional[int] = None):
     return JSONResponse({"lines": get_log_tail(n)})
 
 @app.get("/api/preview")
@@ -176,11 +176,29 @@ def get_preview():
         "is_live": book.name == "live_preview.md"
     })
 
+@app.get("/api/prompt-themes")
+def get_prompt_themes():
+    from src.utils.prompt_loader import PROMPTS_DIR
+    import os
+    if not os.path.exists(PROMPTS_DIR):
+        return JSONResponse({"themes": ["default"]})
+        
+    themes = [d for d in os.listdir(PROMPTS_DIR) if os.path.isdir(os.path.join(PROMPTS_DIR, d))]
+    # Ensure 'default' is always present and first if it exists
+    if "default" in themes:
+        themes.remove("default")
+        themes.insert(0, "default")
+    elif not themes:
+        themes = ["default"]
+        
+    return JSONResponse({"themes": themes})
+
 @app.post("/api/start")
 async def start_pipeline(
     file: UploadFile = File(...),
     rpm_limit: Optional[int] = Form(None),
-    tpm_limit: Optional[int] = Form(None)
+    tpm_limit: Optional[int] = Form(None),
+    prompt_theme: Optional[str] = Form(None)
 ):
     pid = _get_pid()
     if pid and _is_running(pid):
@@ -190,9 +208,14 @@ async def start_pipeline(
     file_bytes = await file.read()
     try:
         data = json.loads(file_bytes)  # Validate JSON
+        if prompt_theme is not None:
+            data["prompt_theme"] = prompt_theme
         # Validate schema using Pydantic
         from src.models.schemas import CourseInput
         CourseInput.model_validate(data)
+        
+        # Rewrite the modified data to file_bytes to be saved
+        file_bytes = json.dumps(data, indent=4).encode('utf-8')
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
     except Exception as e:
@@ -310,7 +333,7 @@ async def stream(interval: float = 1.5):
             if tel.get("status") in ["Completed", "Stopped by user", "CRASHED", "Idle (previous run ended unexpectedly)"]:
                 is_running = False
 
-            logs = get_log_tail(100)
+            logs = get_log_tail(None)
             book = get_latest_book()
             preview = book.read_text(encoding="utf-8") if book else None
             is_live = book.name == "live_preview.md" if book else False

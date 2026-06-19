@@ -113,7 +113,8 @@ def test_learning_context_boundary_future_compatible():
 # Additional check for Heading Duplication sanitization logic
 def test_heading_sanitization():
     draft = "# Module 1: Introduction\n## Submodule: Python Basics\n### Introduction\nThis is content."
-    cleaned = sanitize_headings(draft, "Python Basics")
+    required_headings = ["### Introduction", "### Core Concepts"]
+    cleaned = sanitize_headings(draft, "Python Basics", required_headings)
     
     assert "# Module 1: Introduction" not in cleaned
     assert "## Submodule: Python Basics" not in cleaned

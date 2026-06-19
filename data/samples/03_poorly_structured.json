@@ -1,0 +1,32 @@
+{
+  "course_name": "Learn Coding",
+  "topic": "Code things.",
+  "duration_weeks": 10,
+  "prompt_theme": "default",
+  "modules": [
+    {
+      "title": "Module 1",
+      "module_context": "Introduction",
+      "submodules": [
+        {
+          "title": "Part 1",
+          "content_context": "Do part 1"
+        },
+        {
+          "title": "Part 2",
+          "content_context": "Do part 2"
+        }
+      ]
+    },
+    {
+      "title": "Module 2",
+      "module_context": "More coding",
+      "submodules": [
+        {
+          "title": "Part 3",
+          "content_context": "Do part 3"
+        }
+      ]
+    }
+  ]
+}

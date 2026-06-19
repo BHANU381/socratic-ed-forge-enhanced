@@ -1,0 +1,36 @@
+{
+  "course_name": "Advanced Rust: Memory Safety and Concurrency",
+  "topic": "An in-depth exploration of Rust's ownership model, lifetime annotations, and fearless concurrency patterns for building high-performance systems.",
+  "duration_weeks": 4,
+  "prompt_theme": "default",
+  "modules": [
+    {
+      "title": "Module 1: The Ownership Model Deep Dive",
+      "module_context": "Understanding the foundational rules of memory management in Rust without a garbage collector.",
+      "submodules": [
+        {
+          "title": "1.1 Ownership, Borrowing, and Slices",
+          "content_context": "Explain the rules of ownership, mutable vs immutable borrowing, and how slices provide safe views into memory."
+        },
+        {
+          "title": "1.2 Advanced Lifetimes",
+          "content_context": "Cover lifetime elision rules, explicit annotations, and lifetime bounds in generic structs."
+        }
+      ]
+    },
+    {
+      "title": "Module 2: Fearless Concurrency",
+      "module_context": "Patterns for writing safe concurrent code using standard library primitives.",
+      "submodules": [
+        {
+          "title": "2.1 Threads and Message Passing",
+          "content_context": "Using std::thread and mpsc channels for safe communication between threads."
+        },
+        {
+          "title": "2.2 Shared-State Concurrency",
+          "content_context": "Using Mutex, RwLock, and Arc to safely share state across thread boundaries."
+        }
+      ]
+    }
+  ]
+}

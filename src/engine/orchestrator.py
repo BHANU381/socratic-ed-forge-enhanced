@@ -10,10 +10,10 @@ from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from src.agents.core import ContentGenerator, Critic, Editor, Librarian, FactChecker, InternalLibrarian
+from src.agents.core import ContentGenerator, Critic, Editor, Librarian, FactChecker, InternalLibrarian, CurriculumJudgeEval, CourseQualityJudgeEval, Archivist
 from src.utils.logger import log_event, update_status, update_telemetry
 from src.utils.learning_engine import record_lesson
-from src.models.schemas import CourseInput, TelemetryData
+from src.models.schemas import CourseInput, TelemetryData, EvalResult
 
 # Load environment variables
 load_dotenv()
@@ -32,7 +32,7 @@ def _check_stop(telemetry: Dict[str, Any], session_dir: Path) -> None:
         update_telemetry(telemetry, session_dir=str(session_dir))
         raise SystemExit(0)
 
-def normalize_draft(draft: str, sub_title: str) -> str:
+def normalize_draft(draft: str, sub_title: str, required_headings: List[str]) -> str:
     # Normalize line endings and split
     lines = draft.replace('\r\n', '\n').split('\n')
     cleaned_lines = []
@@ -53,10 +53,9 @@ def normalize_draft(draft: str, sub_title: str) -> str:
             
         # Skip any # or ## or ### headers containing the submodule title
         if (stripped.startswith('#') or stripped.startswith('##') or stripped.startswith('###')) and clean_title in stripped.lower():
-            # But do not strip the required major headings like "Practical Application"
-            if not any(header.lower() in stripped.lower() for header in [
-                "introduction", "core concepts", "practical application", "summary and key takeaways"
-            ]):
+            # But do not strip the required major headings
+            clean_reqs = [req.replace("### ", "").strip().lower() for req in required_headings]
+            if not any(header in stripped.lower() for header in clean_reqs):
                 continue
                 
         cleaned_lines.append(line)
@@ -97,8 +96,13 @@ def update_live_preview(session_dir: Optional[Path], master_file: Path, sub_titl
     except Exception as e:
         print(f"Error updating live preview: {e}")
 
-def validate_draft(draft: str) -> List[str]:
+def validate_draft(draft: str, required_headings: List[str]) -> List[str]:
     errors = []
+    
+    # Ignore conversational prefixes by finding the first required heading
+    if required_headings and required_headings[0] in draft:
+        draft = draft[draft.index(required_headings[0]):]
+        
     lines = [line.strip() for line in draft.split('\n')]
     
     # Check for presence of any # or ## headings
@@ -108,13 +112,6 @@ def validate_draft(draft: str) -> List[str]:
             
     # Extract all level 3 headings
     headings = [line for line in lines if line.startswith('### ')]
-    
-    required_headings = [
-        "### Introduction",
-        "### Core Concepts",
-        "### Practical Application",
-        "### Summary and Key Takeaways",
-    ]
     
     # Check for missing required headings
     for req in required_headings:
@@ -126,10 +123,10 @@ def validate_draft(draft: str) -> List[str]:
         if headings.count(req) > 1:
             errors.append(f"Duplicate required heading: '{req}' appears multiple times.")
             
-    # Check that first non-empty line starts with ### Introduction
+    # Check that first non-empty line starts with the first required heading
     non_empty_lines = [l for l in lines if l]
-    if non_empty_lines and not non_empty_lines[0].startswith("### Introduction"):
-        errors.append("First line of draft must be exactly '### Introduction'.")
+    if non_empty_lines and required_headings and not non_empty_lines[0].startswith(required_headings[0]):
+        errors.append(f"First line of draft must be exactly '{required_headings[0]}'.")
         
     # Check order of required headings:
     indices = []
@@ -141,12 +138,19 @@ def validate_draft(draft: str) -> List[str]:
             
     if len(indices) == len(required_headings):
         if indices != sorted(indices):
-            errors.append("Required headings are in the wrong order. Must be: Introduction, Core Concepts, Practical Application, Summary and Key Takeaways.")
+            req_str = ", ".join([r.replace("### ", "") for r in required_headings])
+            errors.append(f"Required headings are in the wrong order. Must be: {req_str}.")
             
     return errors
 
-def sanitize_headings(draft: str, sub_title: str) -> str:
-    return normalize_draft(draft, sub_title)
+def sanitize_headings(draft: str, sub_title: str, required_headings: List[str]) -> str:
+    # If the draft has a conversational prefix (e.g. from the Editor debate), strip it out.
+    if required_headings:
+        first_heading = required_headings[0]
+        if first_heading in draft:
+            draft = draft[draft.index(first_heading):]
+            
+    return normalize_draft(draft, sub_title, required_headings)
 
 def main() -> None:
     # --- API KEY CHECK ---
@@ -185,12 +189,13 @@ def main() -> None:
     master_file = session_dir / f"{safe_course_name}.md"
     
     # Initialize Agents
-    generator = ContentGenerator("Content Generator")
-    critic = Critic("Critic")
-    editor = Editor("Editor")
-    librarian = Librarian("Librarian")
-    internal_librarian = InternalLibrarian("Internal Librarian")
-    fact_checker = FactChecker("Fact-Checker")
+    generator = ContentGenerator("Content Generator", theme=course.prompt_theme)
+    critic = Critic("Critic", theme=course.prompt_theme)
+    editor = Editor("Editor", theme=course.prompt_theme)
+    librarian = Librarian("Librarian", theme=course.prompt_theme)
+    internal_librarian = InternalLibrarian("Internal Librarian", theme=course.prompt_theme)
+    fact_checker = FactChecker("Fact-Checker", theme=course.prompt_theme)
+    archivist = Archivist("Archivist", theme=course.prompt_theme)
 
     # For telemetry tracking
     telemetry = TelemetryData(
@@ -205,8 +210,38 @@ def main() -> None:
         current_submodule="",
         last_error_type="None",
         last_error_details="",
+        active_iterations=0,
+        passed_1st_iteration=0,
+        passed_2nd_iteration=0,
+        passed_3rd_iteration=0,
+        failed_max_iterations=0,
         run_history=[]
     ).model_dump()
+
+    # --- PRE-GENERATION EVAL: Curriculum Path Judge ---
+    if os.environ.get("RUN_EVALS", "").lower() == "true":
+        update_status("Running Curriculum Path Eval...", session_dir=str(session_dir))
+        log_event("Evals", "Running Curriculum Path Eval...", session_dir=str(session_dir))
+        curriculum_judge = CurriculumJudgeEval(theme=course.prompt_theme)
+        try:
+            eval_result_json = curriculum_judge.evaluate(
+                course_name=course.course_name, 
+                topic=course.topic, 
+                duration_weeks=course.duration_weeks,
+                outline=json.dumps([m.model_dump() for m in course.modules], indent=2)
+            )
+            eval_result = EvalResult.model_validate_json(eval_result_json)
+            if not eval_result.passed:
+                log_event("Evals", f"EVAL FAILED: Curriculum Path Judge\nRaw Output:\n{eval_result_json}", session_dir=str(session_dir))
+                update_status("Pipeline halted due to Curriculum Eval Failure.", session_dir=str(session_dir))
+                telemetry["status"] = "Stopped"
+                telemetry["last_error_type"] = "Curriculum Eval Failed"
+                update_telemetry(telemetry, session_dir=str(session_dir))
+                return
+            else:
+                log_event("Evals", f"EVAL PASSED: Curriculum Path Judge\nRaw Output:\n{eval_result_json}", session_dir=str(session_dir))
+        except Exception as e:
+            log_event("Error", f"Curriculum Eval encountered an error, continuing pipeline... {e}", session_dir=str(session_dir))
 
     # 1. Start Book
     with open(master_file, 'w', encoding='utf-8') as f:
@@ -231,6 +266,7 @@ def main() -> None:
 
     total_submodules = sum(len(mod.submodules) for mod in course.modules)
     submodules_completed = 0
+    running_summary = ""
 
     # 2. Module & Submodule Generation Loop
     try:
@@ -263,9 +299,10 @@ def main() -> None:
                 update_telemetry(telemetry, session_dir=str(session_dir))
                 
                 try:
-                    # Pass content_context
-                    draft = generator.generate(mod.title, sub_title, content_context)
-                    draft = normalize_draft(draft, sub_title)
+                    # Pass content_context and running_summary
+                    draft = generator.generate(mod.title, sub_title, content_context, running_summary)
+                    req_headings = generator.required_headings
+                    draft = normalize_draft(draft, sub_title, req_headings)
                     update_live_preview(session_dir, master_file, sub_title, draft, "Drafting")
                     telemetry["input_tokens"] += generator.input_tokens
                     telemetry["output_tokens"] += generator.output_tokens
@@ -282,12 +319,15 @@ def main() -> None:
                 iterations = 0
                 max_iterations = 3
                 
+                critic_chat = critic.start_chat_session()
+                editor_chat = editor.start_chat_session()
+                
                 while not approved and iterations < max_iterations:
                     iterations += 1
                     telemetry["active_iterations"] = iterations
                     
                     # 1. DETERMINISTIC STRUCTURAL VALIDATION GATE
-                    validation_errors = validate_draft(draft)
+                    validation_errors = validate_draft(draft, req_headings)
                     if validation_errors:
                         validation_critique = "The draft failed structural validation:\n" + "\n".join([f"- {err}" for err in validation_errors])
                         log_event("Critic", f"Structural validation failed: {len(validation_errors)} errors.", session_dir=str(session_dir))
@@ -299,8 +339,8 @@ def main() -> None:
                         telemetry["last_error_details"] = "\n".join(validation_errors)
                         update_telemetry(telemetry, session_dir=str(session_dir))
                         
-                        draft = editor.edit(draft, validation_critique, sub_title, content_context)
-                        draft = normalize_draft(draft, sub_title)
+                        draft = editor.edit_chat(editor_chat, draft, validation_critique, sub_title, content_context)
+                        draft = normalize_draft(draft, sub_title, req_headings)
                         update_live_preview(session_dir, master_file, sub_title, draft, "Repairing Structure")
                         telemetry["input_tokens"] += editor.input_tokens
                         telemetry["output_tokens"] += editor.output_tokens
@@ -318,7 +358,7 @@ def main() -> None:
                     
                     try:
                         # 2. CRITIC
-                        feedback = critic.critique(draft, content_context)
+                        feedback = critic.critique_chat(critic_chat, draft, content_context)
                         telemetry["input_tokens"] += critic.input_tokens
                         telemetry["output_tokens"] += critic.output_tokens
                         telemetry["total_tokens"] += critic.total_tokens
@@ -354,6 +394,7 @@ def main() -> None:
                                     update_status(f"Approved: {sub_title}", session_dir=str(session_dir))
                                     log_event("InternalLibrarian", f"Approved: {sub_title}", session_dir=str(session_dir))
                                 else:
+                                    log_event("InternalLibrarian", f"Markdown issues found:\n{lib_feedback}", session_dir=str(session_dir))
                                     update_status(f"Editor Agent: Fixing Markdown in '{sub_title}'", session_dir=str(session_dir))
                                     log_event("Editor", f"Fixing {sub_title} based on Internal Librarian feedback.", session_dir=str(session_dir))
                                     telemetry["current_agent"] = "Editor"
@@ -361,8 +402,8 @@ def main() -> None:
                                     telemetry["last_error_details"] = lib_feedback
                                     update_telemetry(telemetry, session_dir=str(session_dir))
                                     
-                                    draft = editor.edit(draft, lib_feedback, sub_title, content_context)
-                                    draft = normalize_draft(draft, sub_title)
+                                    draft = editor.edit_chat(editor_chat, draft, lib_feedback, sub_title, content_context)
+                                    draft = normalize_draft(draft, sub_title, req_headings)
                                     update_live_preview(session_dir, master_file, sub_title, draft, "Fixing Markdown")
                                     telemetry["input_tokens"] += editor.input_tokens
                                     telemetry["output_tokens"] += editor.output_tokens
@@ -371,6 +412,7 @@ def main() -> None:
                                     log_event("LearningEngine", f"Recording lesson for {sub_title}: Markdown Error found.", session_dir=str(session_dir))
                                     record_lesson(mod.title, sub_title, lib_feedback, draft) 
                             else:
+                                log_event("Fact-Checker", f"Issues found:\n{fact_feedback}", session_dir=str(session_dir))
                                 update_status(f"Editor Agent: Fixing Fact-Errors in '{sub_title}'", session_dir=str(session_dir))
                                 log_event("Editor", f"Fixing {sub_title} based on fact-checker feedback.", session_dir=str(session_dir))
                                 telemetry["current_agent"] = "Editor"
@@ -378,8 +420,8 @@ def main() -> None:
                                 telemetry["last_error_details"] = fact_feedback
                                 update_telemetry(telemetry, session_dir=str(session_dir))
                                 
-                                draft = editor.edit(draft, fact_feedback, sub_title, content_context)
-                                draft = normalize_draft(draft, sub_title)
+                                draft = editor.edit_chat(editor_chat, draft, fact_feedback, sub_title, content_context)
+                                draft = normalize_draft(draft, sub_title, req_headings)
                                 update_live_preview(session_dir, master_file, sub_title, draft, "Fixing Fact-Errors")
                                 telemetry["input_tokens"] += editor.input_tokens
                                 telemetry["output_tokens"] += editor.output_tokens
@@ -389,6 +431,7 @@ def main() -> None:
                                 record_lesson(mod.title, sub_title, fact_feedback, draft) 
                         else:
                             # 4. EDITOR
+                            log_event("Critic", f"Issues found:\n{feedback}", session_dir=str(session_dir))
                             update_status(f"Editor Agent: Refining '{sub_title}'", session_dir=str(session_dir))
                             log_event("Editor", f"Refining {sub_title} based on feedback.", session_dir=str(session_dir))
                             telemetry["current_agent"] = "Editor"
@@ -396,8 +439,8 @@ def main() -> None:
                             telemetry["last_error_details"] = feedback
                             update_telemetry(telemetry, session_dir=str(session_dir))
                             
-                            draft = editor.edit(draft, feedback, sub_title, content_context)
-                            draft = normalize_draft(draft, sub_title)
+                            draft = editor.edit_chat(editor_chat, draft, feedback, sub_title, content_context)
+                            draft = normalize_draft(draft, sub_title, req_headings)
                             update_live_preview(session_dir, master_file, sub_title, draft, f"Refining Draft (Attempt {iterations})")
                             telemetry["input_tokens"] += editor.input_tokens
                             telemetry["output_tokens"] += editor.output_tokens
@@ -411,9 +454,20 @@ def main() -> None:
                         update_status(f"Agent Error: {e}. Waiting...", session_dir=str(session_dir))
                         time.sleep(15)
                 
-                sanitized_draft = sanitize_headings(draft, sub_title)
+                sanitized_draft = sanitize_headings(draft, sub_title, req_headings)
                 with open(master_file, 'a', encoding='utf-8') as f:
                     f.write(f"\n## Submodule: {sub_title}\n\n{sanitized_draft}\n\n")
+                
+                # --- TELEMETRY STATS TRACKING ---
+                if approved:
+                    if iterations == 1:
+                        telemetry["passed_1st_iteration"] += 1
+                    elif iterations == 2:
+                        telemetry["passed_2nd_iteration"] += 1
+                    elif iterations == 3:
+                        telemetry["passed_3rd_iteration"] += 1
+                else:
+                    telemetry["failed_max_iterations"] += 1
                 
                 update_live_preview(session_dir, master_file)
                 submodules_completed += 1
@@ -422,7 +476,23 @@ def main() -> None:
                 telemetry["last_error_type"] = "None"
                 telemetry["last_error_details"] = ""
                 update_telemetry(telemetry, session_dir=str(session_dir))
-                time.sleep(5) 
+                update_telemetry(telemetry, session_dir=str(session_dir))
+                
+                # --- ITERATIVE COMPRESSION: THE ARCHIVIST ---
+                update_status(f"Archivist: Compressing '{sub_title}'", session_dir=str(session_dir))
+                log_event("Archivist", f"Summarizing {sub_title} for context injection.", session_dir=str(session_dir))
+                try:
+                    archivist_summary = archivist.compress_submodule(sanitized_draft)
+                    running_summary += f"\n- {sub_title}: {archivist_summary}"
+                    
+                    telemetry["input_tokens"] += archivist.input_tokens
+                    telemetry["output_tokens"] += archivist.output_tokens
+                    telemetry["total_tokens"] += archivist.total_tokens
+                    update_telemetry(telemetry, session_dir=str(session_dir))
+                except Exception as e:
+                    log_event("Error", f"Archivist error: {e}. Skipping summary for this submodule.", session_dir=str(session_dir))
+                
+                time.sleep(5)
             
         # 5. GLOBAL LIBRARIAN PASS
         update_status("Global Librarian: Performing final structural audit of entire course...", session_dir=str(session_dir))
@@ -442,15 +512,36 @@ def main() -> None:
                     telemetry["last_error_type"] = "Global Librarian Audit"
                     telemetry["last_error_details"] = structure_feedback
                     update_telemetry(telemetry, session_dir=str(session_dir))
+                    
+                    log_event("LearningEngine", "Recording global lesson for structural issues.", session_dir=str(session_dir))
+                    record_lesson("Global_Audit", "Structure", structure_feedback, "Adhere strictly to global structural requirements.")
                 else:
                     log_event("Librarian", "Global Structure perfection confirmed.", session_dir=str(session_dir))
                     update_status("Librarian: Global Structure Approved.", session_dir=str(session_dir))
+                
+                # --- POST-GENERATION EVAL: Course Quality Judge ---
+                if os.environ.get("RUN_EVALS", "").lower() == "true":
+                    update_status("Running Course Quality Eval...", session_dir=str(session_dir))
+                    log_event("Evals", "Running Course Quality Eval...", session_dir=str(session_dir))
+                    quality_judge = CourseQualityJudgeEval(theme=course.prompt_theme)
+                    try:
+                        eval_result_json = quality_judge.evaluate(full_book)
+                        eval_result = EvalResult.model_validate_json(eval_result_json)
+                        log_event("CourseQualityEval", f"Raw Output:\n{eval_result_json}", session_dir=str(session_dir))
+                        if not eval_result.passed:
+                            update_status(f"Eval Failed: Course Quality (Score: {eval_result.score}/100)", session_dir=str(session_dir))
+                            log_event("LearningEngine", "Recording global lesson for course quality failure.", session_dir=str(session_dir))
+                            record_lesson("Global_Eval", "Course_Quality", eval_result.feedback, "Ensure academic depth, completeness, and rigor.")
+                        else:
+                            update_status(f"Eval Passed: Course Quality (Score: {eval_result.score}/100)", session_dir=str(session_dir))
+                    except Exception as e:
+                        log_event("Evals", f"Course Quality Eval error: {e}", session_dir=str(session_dir))
             else:
                 log_event("Error", "Librarian failed: Master file was not found.", session_dir=str(session_dir))
         except Exception as e:
-            error_msg = f"Librarian error: {str(e)}"
+            error_msg = f"Librarian/Eval error: {str(e)}"
             log_event("Error", error_msg, session_dir=str(session_dir))
-            update_status(f"Librarian Error: {e}", session_dir=str(session_dir))
+            update_status(f"Librarian/Eval Error: {e}", session_dir=str(session_dir))
 
         update_status("Generation Complete! Book Created.", session_dir=str(session_dir))
         log_event("System", "Course generation pipeline finished successfully.", session_dir=str(session_dir))

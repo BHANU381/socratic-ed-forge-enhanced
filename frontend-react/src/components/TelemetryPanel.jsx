@@ -1,4 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Activity } from 'lucide-react'
@@ -12,64 +11,89 @@ export function TelemetryPanel({ telemetry, isRunning }) {
     n != null ? Number(n).toLocaleString() : '—'
 
   return (
-    <Card className="bg-card border-border/50 shadow-lg relative overflow-hidden">
-      {/* Background glow when running */}
-      {isRunning && (
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 to-indigo-500 animate-pulse" />
-      )}
-      
-      <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-[0.7rem] font-bold tracking-widest text-muted-foreground uppercase flex items-center gap-2">
+    <div className="relative flex flex-col p-8 gap-6 shrink-0">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[10px] font-semibold tracking-widest text-zinc-500 uppercase flex items-center gap-2">
           <Activity className="w-3.5 h-3.5" />
           Operational Insights
-        </CardTitle>
-        <Badge variant={isRunning ? "default" : "secondary"} className={isRunning ? "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20" : ""}>
+        </h3>
+        <Badge variant="outline" className={`border-zinc-800 bg-zinc-900 text-[10px] px-2.5 py-0.5 rounded-full tracking-wider ${isRunning ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' : 'text-zinc-400'}`}>
           {isRunning ? (
             <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Running
             </span>
           ) : status}
         </Badge>
-      </CardHeader>
+      </div>
       
-      <CardContent className="px-4 pb-4">
-        <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Active Agent</div>
-            <div className={`text-sm font-semibold font-mono ${isRunning ? 'text-indigo-400' : 'text-foreground'}`}>{t.current_agent || '—'}</div>
-          </div>
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Model</div>
-            <div className="text-xs font-semibold font-mono text-foreground truncate" title={t.model_name}>{t.model_name || '—'}</div>
-          </div>
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Completion</div>
-            <div className={`text-sm font-semibold font-mono ${isRunning || status === 'Completed' ? 'text-emerald-400' : status?.startsWith('Failed') ? 'text-red-400' : status === 'Stopped' ? 'text-amber-400' : 'text-foreground'}`}>{pct}%</div>
-          </div>
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Total Tokens</div>
-            <div className="text-sm font-semibold font-mono text-foreground">{fmtNum(t.total_tokens)}</div>
-          </div>
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Input Tokens</div>
-            <div className="text-xs font-semibold font-mono text-muted-foreground">{fmtNum(t.input_tokens)}</div>
-          </div>
-          <div className="bg-muted/30 border border-border/40 rounded-md p-2.5">
-            <div className="text-[0.6rem] font-semibold text-muted-foreground uppercase tracking-widest mb-1">Output Tokens</div>
-            <div className="text-xs font-semibold font-mono text-muted-foreground">{fmtNum(t.output_tokens)}</div>
-          </div>
+      {/* 1px grid trick for Cockpit mode */}
+      <div className="grid grid-cols-2 gap-px bg-zinc-800/50 rounded-2xl overflow-hidden border border-zinc-800/50 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.5)]">
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Active Agent</span>
+          <span className={`text-sm font-medium font-mono tracking-tight ${isRunning ? 'text-zinc-200' : 'text-zinc-400'}`}>{t.current_agent || '—'}</span>
         </div>
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Model</span>
+          <span className="text-xs font-medium font-mono text-zinc-400 truncate" title={t.model_name}>{t.model_name || '—'}</span>
+        </div>
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Completion</span>
+          <span className={`text-sm font-medium font-mono ${isRunning || status === 'Completed' ? 'text-emerald-400' : 'text-zinc-300'}`}>{pct}%</span>
+        </div>
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Total Tokens</span>
+          <span className="text-sm font-medium font-mono text-zinc-200">{fmtNum(t.total_tokens)}</span>
+        </div>
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Input</span>
+          <span className="text-xs font-medium font-mono text-zinc-400">{fmtNum(t.input_tokens)}</span>
+        </div>
+        <div className="bg-zinc-950 p-4 flex flex-col gap-1.5">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest">Output</span>
+          <span className="text-xs font-medium font-mono text-zinc-400">{fmtNum(t.output_tokens)}</span>
+        </div>
+      </div>
 
-        <Progress value={pct} className="h-1.5 bg-muted/50" indicatorClassName="bg-gradient-to-r from-indigo-500 to-purple-500" />
+      {/* Loop Stats Grid */}
+      <div className="grid grid-cols-4 gap-px bg-zinc-800/50 rounded-xl overflow-hidden border border-zinc-800/50 shadow-[0_2px_10px_-5px_rgba(0,0,0,0.5)]">
+        <div className="bg-zinc-950 p-2 flex flex-col items-center gap-1">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Pass (1st)</span>
+          <span className="text-sm font-medium font-mono text-emerald-400">{fmtNum(t.passed_1st_iteration)}</span>
+        </div>
+        <div className="bg-zinc-950 p-2 flex flex-col items-center gap-1">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Pass (2nd)</span>
+          <span className="text-sm font-medium font-mono text-emerald-500">{fmtNum(t.passed_2nd_iteration)}</span>
+        </div>
+        <div className="bg-zinc-950 p-2 flex flex-col items-center gap-1">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Pass (3rd)</span>
+          <span className="text-sm font-medium font-mono text-amber-400">{fmtNum(t.passed_3rd_iteration)}</span>
+        </div>
+        <div className="bg-zinc-950 p-2 flex flex-col items-center gap-1">
+          <span className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest text-center">Failed</span>
+          <span className="text-sm font-medium font-mono text-rose-400">{fmtNum(t.failed_max_iterations)}</span>
+        </div>
+      </div>
 
-        {(t.current_module || t.current_submodule) && (
-          <div className="mt-3 text-xs text-muted-foreground leading-relaxed">
-            {t.current_module && <div><span className="text-muted-foreground/70">Module: </span><span className="text-foreground/90">{t.current_module}</span></div>}
-            {t.current_submodule && <div><span className="text-muted-foreground/70">Submodule: </span><span className="text-indigo-400 font-medium">{t.current_submodule}</span></div>}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <div className="space-y-3">
+        <Progress value={pct} className="h-1 bg-zinc-900 border border-zinc-800/50 rounded-full" indicatorClassName="bg-zinc-300 rounded-full" />
+      </div>
+
+      {(t.current_module || t.current_submodule) && (
+        <div className="text-[11px] text-zinc-400 space-y-1.5 tracking-wide">
+          {t.current_module && <div className="truncate"><span className="text-zinc-600 mr-2">Mod:</span> {t.current_module}</div>}
+          {t.current_submodule && (
+            <div className="flex items-center justify-between">
+              <div className="truncate"><span className="text-zinc-600 mr-2">Sub:</span> <span className="text-zinc-300 font-medium">{t.current_submodule}</span></div>
+              {t.active_iterations > 0 && (
+                <Badge variant="outline" className="text-[9px] bg-zinc-900 border-zinc-700 text-zinc-400">
+                  Attempt {t.active_iterations}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
