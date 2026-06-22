@@ -3,260 +3,32 @@
         {
             "id": "rule_01",
             "text": "Ensure numpy is imported as np.",
-            "count": 2,
-            "last_updated": "2026-06-18T11:47:23.224273"
+            "count": 3,
+            "last_updated": "2026-06-22T10:14:24.346331"
         },
         {
             "id": "rule_02",
-            "text": "Use only markdown headers of level ### or lower for all document structure.",
-            "count": 25,
-            "last_updated": "2026-06-18T15:56:04.617046"
+            "text": "Mocked Response",
+            "count": 6,
+            "last_updated": "2026-06-22T10:12:06.335808"
         },
         {
             "id": "rule_03",
-            "text": "Always adhere to mandatory heading naming, required checklist inclusion, and explicit dirty bit validation.",
-            "count": 3,
-            "last_updated": "2026-06-18T12:05:46.981797"
+            "text": "Use level three (###) or lower headers exclusively; never use level one or two headers.",
+            "count": 70,
+            "last_updated": "2026-06-22T10:49:17.048470"
         },
         {
             "id": "rule_04",
-            "text": "Always include the required structural headers before developing content to ensure strict compliance.",
-            "count": 5,
-            "last_updated": "2026-06-18T16:02:39.059537"
+            "text": "Use only level-three headings and integrate required library imports within all technical practical examples.",
+            "count": 1,
+            "last_updated": "2026-06-22T10:14:09.745292"
         },
         {
             "id": "rule_05",
-            "text": "Maintain a flat hierarchy, exclude code, and define validation logic explicitly in all sections.",
+            "text": "Always include mandatory library imports and code snippets within all practical application sections.",
             "count": 1,
-            "last_updated": "2026-06-18T12:02:17.481589"
-        },
-        {
-            "id": "rule_06",
-            "text": "Enforce modular data structures, plain-text headers, and explicit state-validation logic in all future drafts.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:02:30.071960"
-        },
-        {
-            "id": "rule_07",
-            "text": "Remove irrelevant libraries, mandate learner synthesis tasks, and define state-locking mechanisms for policy validation.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:03:02.627972"
-        },
-        {
-            "id": "rule_08",
-            "text": "Use only four headers, exclude all code, and strictly align content with core constraints.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:03:18.296802"
-        },
-        {
-            "id": "rule_09",
-            "text": "Draft technical documentation using four headers, structural data formats, and mandatory verification checklists only.",
-            "count": 16,
-            "last_updated": "2026-06-18T17:10:57.521743"
-        },
-        {
-            "id": "rule_10",
-            "text": "Restrict content strictly to defined curriculum components; exclude extraneous technical concepts and include mandatory elements.",
-            "count": 4,
-            "last_updated": "2026-06-18T16:01:15.367508"
-        },
-        {
-            "id": "rule_11",
-            "text": "Strictly align verification requirements with documented curriculum scope, avoiding hallucinations and internal logic contradictions.",
-            "count": 5,
-            "last_updated": "2026-06-18T15:58:37.497602"
-        },
-        {
-            "id": "rule_12",
-            "text": "Strictly adhere to the mandatory header structure and sequence in all initial draft submissions.",
-            "count": 2,
-            "last_updated": "2026-06-18T15:52:56.608036"
-        },
-        {
-            "id": "rule_13",
-            "text": "Mandatory inclusion of the ### Verification Test heading must precede all architecture documentation.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:08:33.687979"
-        },
-        {
-            "id": "rule_14",
-            "text": "Remove headers, include mandatory verification gates, and implement functional code for all structural requirements.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:09:25.810792"
-        },
-        {
-            "id": "rule_15",
-            "text": "Adhere strictly to authorized header hierarchies and mandated section ordering in all documentation drafts.",
-            "count": 7,
-            "last_updated": "2026-06-18T16:03:33.845684"
-        },
-        {
-            "id": "rule_16",
-            "text": "Prioritize robust input validation and state isolation before executing agent telemetry logic gates.",
-            "count": 1,
-            "last_updated": "2026-06-18T12:11:01.043208"
-        },
-        {
-            "id": "rule_17",
-            "text": "Replace all Markdown headers with bold text and implement programmatic logic for state verification.",
-            "count": 1,
-            "last_updated": "2026-06-18T15:54:52.421352"
-        },
-        {
-            "id": "rule_18",
-            "text": "Use only level 3 headers, follow the mandatory section order, and include no code.",
-            "count": 8,
-            "last_updated": "2026-06-18T16:53:23.422082"
-        },
-        {
-            "id": "rule_19",
-            "text": "Align technical terminology with the curriculum and eliminate extraneous, non-prescriptive architectural analogies.",
-            "count": 2,
-            "last_updated": "2026-06-18T16:02:33.039524"
-        },
-        {
-            "id": "rule_20",
-            "text": "Integrate functional code blocks and consolidated validation checklists into a strictly standardized document structure.",
-            "count": 4,
-            "last_updated": "2026-06-18T17:05:49.250094"
-        },
-        {
-            "id": "rule_21",
-            "text": "Adhere to strict flat headers, embed actionable checklists, and provide functional code implementation only.",
-            "count": 4,
-            "last_updated": "2026-06-18T17:02:05.663437"
-        },
-        {
-            "id": "rule_22",
-            "text": "Align technical complexity and performance metrics strictly with the defined pedagogical scope and functionality.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:03:52.583560"
-        },
-        {
-            "id": "rule_23",
-            "text": "Integrate verification checklists into bulleted sections and strictly prohibit sub-headers and trailing markdown lists.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:04:25.862043"
-        },
-        {
-            "id": "rule_24",
-            "text": "Align implementation details strictly with curriculum requirements, removing contradictory constraints and unsupported telemetry metrics.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:04:49.519335"
-        },
-        {
-            "id": "rule_25",
-            "text": "Use only level 3 (###) headers; never use level 1 (#) or level 2 (##) headers.",
-            "count": 7,
-            "last_updated": "2026-06-18T17:19:11.701379"
-        },
-        {
-            "id": "rule_26",
-            "text": "Use only level three (###) or lower headers to ensure structural validation compliance.",
-            "count": 12,
-            "last_updated": "2026-06-18T17:16:35.734222"
-        },
-        {
-            "id": "rule_27",
-            "text": "Use exclusively level three (###) or lower headers to ensure structural validation.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:54:41.053532"
-        },
-        {
-            "id": "rule_28",
-            "text": "Remove all markdown headers and include commented code blocks demonstrating tool utilization.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:55:28.831841"
-        },
-        {
-            "id": "rule_29",
-            "text": "Use only level three or lower headers to ensure compliance with document structural standards.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:55:35.198554"
-        },
-        {
-            "id": "rule_30",
-            "text": "Use only headers level ### or lower; never use level # or ## for content.",
-            "count": 1,
-            "last_updated": "2026-06-18T16:55:40.657239"
-        },
-        {
-            "id": "rule_31",
-            "text": "Include annotated code blocks to illustrate technical concepts while avoiding bold text within headers.",
-            "count": 2,
-            "last_updated": "2026-06-18T16:56:53.233568"
-        },
-        {
-            "id": "rule_32",
-            "text": "Use only level 3 (###) or lower headers for all documentation sections.",
-            "count": 11,
-            "last_updated": "2026-06-18T17:15:48.235220"
-        },
-        {
-            "id": "rule_33",
-            "text": "Use only level three (###) or lower headers to ensure structural validation compliance.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:00:13.331367"
-        },
-        {
-            "id": "rule_34",
-            "text": "Ensure all examples strictly mirror the defined output format to prevent structural instructions conflicts.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:00:40.454463"
-        },
-        {
-            "id": "rule_35",
-            "text": "Always include heavily commented code blocks to demonstrate all technical implementation requirements.",
-            "count": 4,
-            "last_updated": "2026-06-18T17:15:34.511682"
-        },
-        {
-            "id": "rule_36",
-            "text": "Use only level three (###) or lower headers; remove all single-level (#) documentation headers.",
-            "count": 3,
-            "last_updated": "2026-06-18T17:13:49.860374"
-        },
-        {
-            "id": "rule_37",
-            "text": "Standardize heading hierarchy, link all anchors, and ensure uniform footer formatting across all modules.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:06:12.705980"
-        },
-        {
-            "id": "rule_38",
-            "text": "Use only level 3 headers (###) or lower; never use level 1 (#) headers.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:11:03.156420"
-        },
-        {
-            "id": "rule_39",
-            "text": "Use only level 3 (###) headers; exclude markdown headers from code block comments.",
-            "count": 2,
-            "last_updated": "2026-06-18T17:14:40.756543"
-        },
-        {
-            "id": "rule_40",
-            "text": "Use only level three (###) or deeper headers for all structural formatting.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:13:56.004699"
-        },
-        {
-            "id": "rule_41",
-            "text": "Use only triple-hash (###) or lower headers for all document section titles.",
-            "count": 2,
-            "last_updated": "2026-06-18T17:14:56.340220"
-        },
-        {
-            "id": "rule_42",
-            "text": "Distinguish goal initialization from the three-stage functional loop to ensure correct task-based termination logic.",
-            "count": 1,
-            "last_updated": "2026-06-18T17:16:09.635058"
-        },
-        {
-            "id": "rule_43",
-            "text": "Use only headers level 3 (###) or lower to maintain structural compliance during drafting.",
-            "count": 2,
-            "last_updated": "2026-06-18T17:19:05.364772"
+            "last_updated": "2026-06-22T10:19:18.489866"
         }
     ]
 }

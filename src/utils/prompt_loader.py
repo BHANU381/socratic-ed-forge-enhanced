@@ -20,7 +20,11 @@ def load_prompt(filename: str, theme: str = "default", **kwargs) -> Tuple[str, L
     filepath = os.path.join(theme_dir, filename)
     
     if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Prompt template '{filename}' not found in theme '{theme}' at {filepath}")
+        default_filepath = os.path.join(PROMPTS_DIR, "default", filename)
+        if os.path.exists(default_filepath):
+            filepath = default_filepath
+        else:
+            raise FileNotFoundError(f"Prompt template '{filename}' not found in theme '{theme}' at {filepath}")
         
     with open(filepath, "r", encoding="utf-8") as f:
         template = f.read()

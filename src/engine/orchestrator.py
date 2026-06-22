@@ -99,9 +99,14 @@ def update_live_preview(session_dir: Optional[Path], master_file: Path, sub_titl
 def validate_draft(draft: str, required_headings: List[str]) -> List[str]:
     errors = []
     
-    # Ignore conversational prefixes by finding the first required heading
+    # Ignore conversational prefixes by finding the first required heading,
+    # but only if there are no headings in the prefix before it.
     if required_headings and required_headings[0] in draft:
-        draft = draft[draft.index(required_headings[0]):]
+        prefix = draft[:draft.index(required_headings[0])]
+        prefix_lines = [line.strip() for line in prefix.split('\n')]
+        has_headings_in_prefix = any(line.startswith('#') for line in prefix_lines)
+        if not has_headings_in_prefix:
+            draft = draft[draft.index(required_headings[0]):]
         
     lines = [line.strip() for line in draft.split('\n')]
     
@@ -269,9 +274,27 @@ def main() -> None:
     running_summary = ""
 
     # 2. Module & Submodule Generation Loop
+    # Extract course variables from course Pydantic model
+    course_name = course.course_name
+    course_topic = course.topic
+    duration_weeks = course.duration_weeks
+
+    # Dynamically build curriculum_structure representing module/submodule hierarchy
+    curriculum_structure_lines = []
+    for m_idx, m in enumerate(course.modules):
+        m_title = m.title.strip()
+        if m_title.lower().startswith("module"):
+            curriculum_structure_lines.append(m_title)
+        else:
+            curriculum_structure_lines.append(f"Module {m_idx+1}: {m_title}")
+        for s in m.submodules:
+            curriculum_structure_lines.append(f"  - {s.title}")
+    curriculum_structure = "\n".join(curriculum_structure_lines)
+
     try:
         for i, mod in enumerate(course.modules):
             _check_stop(telemetry, session_dir)  # Check before each module
+            module_context = mod.module_context
             title = mod.title.strip()
             with open(master_file, 'a', encoding='utf-8') as f:
                 if title.lower().startswith("module"):
@@ -299,8 +322,15 @@ def main() -> None:
                 update_telemetry(telemetry, session_dir=str(session_dir))
                 
                 try:
-                    # Pass content_context and running_summary
-                    draft = generator.generate(mod.title, sub_title, content_context, running_summary)
+                    # Pass content_context and running_summary along with course metadata
+                    draft = generator.generate(
+                        module_title=mod.title,
+                        sub_title=sub_title,
+                        content_context=content_context,
+                        running_summary=running_summary,
+                        course_info=course,
+                        module_context=module_context
+                    )
                     req_headings = generator.required_headings
                     draft = normalize_draft(draft, sub_title, req_headings)
                     update_live_preview(session_dir, master_file, sub_title, draft, "Drafting")
@@ -339,7 +369,17 @@ def main() -> None:
                         telemetry["last_error_details"] = "\n".join(validation_errors)
                         update_telemetry(telemetry, session_dir=str(session_dir))
                         
-                        draft = editor.edit_chat(editor_chat, draft, validation_critique, sub_title, content_context)
+                        draft = editor.edit_chat(
+                            chat_session=editor_chat,
+                            draft=draft,
+                            feedback=validation_critique,
+                            sub_title=sub_title,
+                            content_context=content_context,
+                            course_info=course,
+                            module_title=mod.title,
+                            running_summary=running_summary,
+                            module_context=module_context
+                        )
                         draft = normalize_draft(draft, sub_title, req_headings)
                         update_live_preview(session_dir, master_file, sub_title, draft, "Repairing Structure")
                         telemetry["input_tokens"] += editor.input_tokens
@@ -358,7 +398,16 @@ def main() -> None:
                     
                     try:
                         # 2. CRITIC
-                        feedback = critic.critique_chat(critic_chat, draft, content_context)
+                        feedback = critic.critique_chat(
+                            chat_session=critic_chat,
+                            draft=draft,
+                            content_context=content_context,
+                            course_info=course,
+                            module_title=mod.title,
+                            sub_title=sub_title,
+                            running_summary=running_summary,
+                            module_context=module_context
+                        )
                         telemetry["input_tokens"] += critic.input_tokens
                         telemetry["output_tokens"] += critic.output_tokens
                         telemetry["total_tokens"] += critic.total_tokens
@@ -384,7 +433,11 @@ def main() -> None:
                                 update_telemetry(telemetry, session_dir=str(session_dir))
                                 update_live_preview(session_dir, master_file, sub_title, draft, "Markdown Checking")
 
-                                lib_feedback = internal_librarian.audit_draft(draft)
+                                lib_feedback = internal_librarian.audit_draft(
+                                    content=draft,
+                                    course_info=course,
+                                    module_context=module_context
+                                )
                                 telemetry["input_tokens"] += internal_librarian.input_tokens
                                 telemetry["output_tokens"] += internal_librarian.output_tokens
                                 telemetry["total_tokens"] += internal_librarian.total_tokens
@@ -402,7 +455,17 @@ def main() -> None:
                                     telemetry["last_error_details"] = lib_feedback
                                     update_telemetry(telemetry, session_dir=str(session_dir))
                                     
-                                    draft = editor.edit_chat(editor_chat, draft, lib_feedback, sub_title, content_context)
+                                    draft = editor.edit_chat(
+                                        chat_session=editor_chat,
+                                        draft=draft,
+                                        feedback=lib_feedback,
+                                        sub_title=sub_title,
+                                        content_context=content_context,
+                                        course_info=course,
+                                        module_title=mod.title,
+                                        running_summary=running_summary,
+                                        module_context=module_context
+                                    )
                                     draft = normalize_draft(draft, sub_title, req_headings)
                                     update_live_preview(session_dir, master_file, sub_title, draft, "Fixing Markdown")
                                     telemetry["input_tokens"] += editor.input_tokens
@@ -420,7 +483,17 @@ def main() -> None:
                                 telemetry["last_error_details"] = fact_feedback
                                 update_telemetry(telemetry, session_dir=str(session_dir))
                                 
-                                draft = editor.edit_chat(editor_chat, draft, fact_feedback, sub_title, content_context)
+                                draft = editor.edit_chat(
+                                    chat_session=editor_chat,
+                                    draft=draft,
+                                    feedback=fact_feedback,
+                                    sub_title=sub_title,
+                                    content_context=content_context,
+                                    course_info=course,
+                                    module_title=mod.title,
+                                    running_summary=running_summary,
+                                    module_context=module_context
+                                )
                                 draft = normalize_draft(draft, sub_title, req_headings)
                                 update_live_preview(session_dir, master_file, sub_title, draft, "Fixing Fact-Errors")
                                 telemetry["input_tokens"] += editor.input_tokens
@@ -439,7 +512,17 @@ def main() -> None:
                             telemetry["last_error_details"] = feedback
                             update_telemetry(telemetry, session_dir=str(session_dir))
                             
-                            draft = editor.edit_chat(editor_chat, draft, feedback, sub_title, content_context)
+                            draft = editor.edit_chat(
+                                chat_session=editor_chat,
+                                draft=draft,
+                                feedback=feedback,
+                                sub_title=sub_title,
+                                content_context=content_context,
+                                course_info=course,
+                                module_title=mod.title,
+                                running_summary=running_summary,
+                                module_context=module_context
+                            )
                             draft = normalize_draft(draft, sub_title, req_headings)
                             update_live_preview(session_dir, master_file, sub_title, draft, f"Refining Draft (Attempt {iterations})")
                             telemetry["input_tokens"] += editor.input_tokens
@@ -482,7 +565,13 @@ def main() -> None:
                 update_status(f"Archivist: Compressing '{sub_title}'", session_dir=str(session_dir))
                 log_event("Archivist", f"Summarizing {sub_title} for context injection.", session_dir=str(session_dir))
                 try:
-                    archivist_summary = archivist.compress_submodule(sanitized_draft)
+                    archivist_summary = archivist.compress_submodule(
+                        content=sanitized_draft,
+                        course_info=course,
+                        module_title=mod.title,
+                        sub_title=sub_title,
+                        running_summary=running_summary
+                    )
                     running_summary += f"\n- {sub_title}: {archivist_summary}"
                     
                     telemetry["input_tokens"] += archivist.input_tokens
@@ -504,7 +593,11 @@ def main() -> None:
             if master_file.exists():
                 full_book = master_file.read_text(encoding='utf-8')
                 
-                structure_feedback = librarian.audit_structure(full_book)
+                structure_feedback = librarian.audit_structure(
+                    full_content=full_book,
+                    curriculum_structure=curriculum_structure,
+                    course_info=course
+                )
                 if "APPROVED" not in structure_feedback.upper():
                     error_msg = f"Structural issues found in final book:\n{structure_feedback}"
                     log_event("Librarian", error_msg, session_dir=str(session_dir))

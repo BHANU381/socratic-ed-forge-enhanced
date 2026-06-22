@@ -31,6 +31,58 @@ except ValueError:
 
 rate_limiter = RateLimiter(rpm_limit=rpm_limit, tpm_limit=tpm_limit)
 
+def _extract_course_metadata(course_info=None, **kwargs) -> dict:
+    """
+    Extract course metadata variables (course_name, course_topic, duration_weeks, 
+    module_context, source_context, learned_rules) from either a Pydantic object, 
+    a dictionary, or keyword arguments, defaulting any missing variables to empty strings "" 
+    to ensure complete backwards compatibility and prevent KeyErrors.
+    """
+    metadata = {}
+    
+    def get_val(key_options, attr_options):
+        # 1. Check kwargs first
+        for key in key_options:
+            if key in kwargs and kwargs[key] is not None:
+                return kwargs[key]
+        # 2. Check course_info as dict or pydantic object
+        if course_info is not None:
+            if isinstance(course_info, dict):
+                for key in key_options:
+                    if key in course_info and course_info[key] is not None:
+                        return course_info[key]
+            else:
+                # assume Pydantic or generic object
+                for attr in attr_options:
+                    if hasattr(course_info, attr):
+                        val = getattr(course_info, attr)
+                        if val is not None:
+                            return val
+                # check dict representations
+                try:
+                    if hasattr(course_info, "model_dump"):
+                        d = course_info.model_dump()
+                        for key in key_options:
+                            if key in d and d[key] is not None:
+                                return d[key]
+                    elif hasattr(course_info, "dict"):
+                        d = course_info.dict()
+                        for key in key_options:
+                            if key in d and d[key] is not None:
+                                return d[key]
+                except Exception:
+                    pass
+        return ""
+
+    metadata["course_name"] = str(get_val(["course_name", "name"], ["course_name", "name"]))
+    metadata["course_topic"] = str(get_val(["course_topic", "topic"], ["course_topic", "topic"]))
+    metadata["duration_weeks"] = str(get_val(["duration_weeks"], ["duration_weeks"]))
+    metadata["module_context"] = str(get_val(["module_context"], ["module_context"]))
+    metadata["source_context"] = str(get_val(["source_context"], ["source_context"]))
+    metadata["learned_rules"] = str(get_val(["learned_rules"], ["learned_rules"]))
+    
+    return metadata
+
 class AgentBase:
     """Base class for all agents with built-in error handling, pacing, and learning."""
     def __init__(self, role, model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
@@ -243,7 +295,7 @@ class AgentBase:
         raise Exception(f"[{self.role}] Failed after {retries} retries. Last error: {self.last_error}")
 
 class ContentGenerator(AgentBase):
-    def generate(self, module_title, sub_title, content_context, running_summary=""):
+    def generate(self, module_title, sub_title, content_context, running_summary="", course_info=None, **kwargs):
         learning_context = self._get_learning_context()
         
         learning_context_block = ""
@@ -254,39 +306,122 @@ class ContentGenerator(AgentBase):
                 f"```\n{learning_context}\n```\n\n"
             )
 
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        if not metadata.get("learned_rules"):
+            metadata["learned_rules"] = learning_context
+            
+        merged_kwargs = {**metadata, **kwargs}
+        
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("content_context", None)
+        merged_kwargs.pop("learning_context_block", None)
+        merged_kwargs.pop("running_summary", None)
+
         prompt, self.required_headings = load_prompt("content_generator.md", 
                              theme=self.theme,
                              sub_title=sub_title, 
+                             submodule_title=sub_title,
                              module_title=module_title, 
                              content_context=content_context, 
                              learning_context_block=learning_context_block,
-                             running_summary=running_summary)
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
 class Archivist(AgentBase):
-    def compress_submodule(self, content):
+    def compress_submodule(self, content, course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        merged_kwargs = {**metadata, **kwargs}
+        
+        module_title = merged_kwargs.get("module_title", "")
+        sub_title = merged_kwargs.get("sub_title", merged_kwargs.get("submodule_title", ""))
+        running_summary = merged_kwargs.get("running_summary", "")
+        
+        merged_kwargs.pop("content", None)
+        merged_kwargs.pop("approved_lesson", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("running_summary", None)
+        
         prompt, _ = load_prompt("archivist.md", 
                              theme=self.theme,
-                             content=content)
+                             content=content,
+                             approved_lesson=content,
+                             module_title=module_title,
+                             sub_title=sub_title,
+                             submodule_title=sub_title,
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
 class Critic(AgentBase):
-    def critique(self, draft, content_context):
+    def critique(self, draft, content_context, course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        if not metadata.get("learned_rules"):
+            metadata["learned_rules"] = self._get_learning_context()
+            
+        merged_kwargs = {**metadata, **kwargs}
+        
+        module_title = merged_kwargs.get("module_title", "")
+        sub_title = merged_kwargs.get("sub_title", merged_kwargs.get("submodule_title", ""))
+        running_summary = merged_kwargs.get("running_summary", "")
+
+        merged_kwargs.pop("content_context", None)
+        merged_kwargs.pop("draft", None)
+        merged_kwargs.pop("lesson_draft", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("running_summary", None)
+
         prompt, _ = load_prompt("critic.md", 
                              theme=self.theme,
                              content_context=content_context, 
-                             draft=draft)
+                             draft=draft,
+                             lesson_draft=draft,
+                             module_title=module_title,
+                             sub_title=sub_title,
+                             submodule_title=sub_title,
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
-    def critique_chat(self, chat_session, draft, content_context):
+    def critique_chat(self, chat_session, draft, content_context, course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        if not metadata.get("learned_rules"):
+            metadata["learned_rules"] = self._get_learning_context()
+            
+        merged_kwargs = {**metadata, **kwargs}
+        
+        module_title = merged_kwargs.get("module_title", "")
+        sub_title = merged_kwargs.get("sub_title", merged_kwargs.get("submodule_title", ""))
+        running_summary = merged_kwargs.get("running_summary", "")
+
+        merged_kwargs.pop("content_context", None)
+        merged_kwargs.pop("draft", None)
+        merged_kwargs.pop("lesson_draft", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("running_summary", None)
+
         prompt, _ = load_prompt("critic.md", 
                              theme=self.theme,
                              content_context=content_context, 
-                             draft=draft)
+                             draft=draft,
+                             lesson_draft=draft,
+                             module_title=module_title,
+                             sub_title=sub_title,
+                             submodule_title=sub_title,
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._send_message_with_retry(chat_session, prompt)
 
 class Editor(AgentBase):
-    def edit(self, draft, feedback, sub_title, content_context):
+    def edit(self, draft, feedback, sub_title, content_context, course_info=None, **kwargs):
         learning_context = self._get_learning_context()
         learning_context_block = ""
         if learning_context:
@@ -296,16 +431,42 @@ class Editor(AgentBase):
                 f"```\n{learning_context}\n```\n\n"
             )
             
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        if not metadata.get("learned_rules"):
+            metadata["learned_rules"] = learning_context
+            
+        merged_kwargs = {**metadata, **kwargs}
+        
+        module_title = merged_kwargs.get("module_title", "")
+        running_summary = merged_kwargs.get("running_summary", "")
+
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("content_context", None)
+        merged_kwargs.pop("feedback", None)
+        merged_kwargs.pop("critic_feedback", None)
+        merged_kwargs.pop("learning_context_block", None)
+        merged_kwargs.pop("draft", None)
+        merged_kwargs.pop("lesson_draft", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("running_summary", None)
+
         prompt, _ = load_prompt("editor.md", 
                              theme=self.theme,
                              sub_title=sub_title, 
+                             submodule_title=sub_title,
                              content_context=content_context, 
                              feedback=feedback,
+                             critic_feedback=feedback,
                              learning_context_block=learning_context_block,
-                             draft=draft)
+                             draft=draft,
+                             lesson_draft=draft,
+                             module_title=module_title,
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
-    def edit_chat(self, chat_session, draft, feedback, sub_title, content_context):
+    def edit_chat(self, chat_session, draft, feedback, sub_title, content_context, course_info=None, **kwargs):
         learning_context = self._get_learning_context()
         learning_context_block = ""
         if learning_context:
@@ -315,28 +476,86 @@ class Editor(AgentBase):
                 f"```\n{learning_context}\n```\n\n"
             )
             
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        if not metadata.get("learned_rules"):
+            metadata["learned_rules"] = learning_context
+            
+        merged_kwargs = {**metadata, **kwargs}
+        
+        module_title = merged_kwargs.get("module_title", "")
+        running_summary = merged_kwargs.get("running_summary", "")
+
+        merged_kwargs.pop("sub_title", None)
+        merged_kwargs.pop("submodule_title", None)
+        merged_kwargs.pop("content_context", None)
+        merged_kwargs.pop("feedback", None)
+        merged_kwargs.pop("critic_feedback", None)
+        merged_kwargs.pop("learning_context_block", None)
+        merged_kwargs.pop("draft", None)
+        merged_kwargs.pop("lesson_draft", None)
+        merged_kwargs.pop("module_title", None)
+        merged_kwargs.pop("running_summary", None)
+
         prompt, _ = load_prompt("editor.md", 
                              theme=self.theme,
                              sub_title=sub_title, 
+                             submodule_title=sub_title,
                              content_context=content_context, 
                              feedback=feedback,
+                             critic_feedback=feedback,
                              learning_context_block=learning_context_block,
-                             draft=draft)
+                             draft=draft,
+                             lesson_draft=draft,
+                             module_title=module_title,
+                             running_summary=running_summary,
+                             **merged_kwargs)
         return self._send_message_with_retry(chat_session, prompt)
 
 class Librarian(AgentBase):
-    def audit_structure(self, full_content, content_context=None):
-        prompt, _ = load_prompt("librarian.md", 
+    def audit(self, full_content, curriculum_structure="", course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        merged_kwargs = {**metadata, **kwargs}
+        
+        merged_kwargs.pop("curriculum_structure", None)
+        merged_kwargs.pop("complete_course", None)
+        merged_kwargs.pop("full_content", None)
+        
+        prompt_name = "global_librarian.md" if self.theme == "general" else "librarian.md"
+        
+        prompt, _ = load_prompt(prompt_name, 
                              theme=self.theme,
-                             full_content=full_content)
+                             curriculum_structure=curriculum_structure,
+                             complete_course=full_content,
+                             full_content=full_content,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
+    def audit_structure(self, full_content, content_context=None, course_info=None, **kwargs):
+        curriculum_structure = kwargs.pop("curriculum_structure", "")
+        kwargs.pop("full_content", None)
+        kwargs.pop("content_context", None)
+        kwargs.pop("course_info", None)
+        return self.audit(full_content=full_content, curriculum_structure=curriculum_structure, course_info=course_info, **kwargs)
+
 class InternalLibrarian(AgentBase):
-    def audit_draft(self, content):
+    def repair(self, content, course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        merged_kwargs = {**metadata, **kwargs}
+        
+        merged_kwargs.pop("content", None)
+        merged_kwargs.pop("lesson_content", None)
+        
         prompt, _ = load_prompt("internal_librarian.md", 
                              theme=self.theme,
-                             content=content)
+                             content=content,
+                             lesson_content=content,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
+
+    def audit_draft(self, content, course_info=None, **kwargs):
+        kwargs.pop("content", None)
+        kwargs.pop("course_info", None)
+        return self.repair(content, course_info=course_info, **kwargs)
 
 class FactChecker(AgentBase):
     def check_facts(self, content, content_context):
@@ -399,13 +618,32 @@ class CurriculumJudgeEval(AgentBase):
         from src.models.schemas import EvalResult
         self.response_schema = EvalResult
 
-    def evaluate(self, course_name, topic, duration_weeks, outline):
+    def evaluate(self, course_info=None, **kwargs):
+        metadata = _extract_course_metadata(course_info, **kwargs)
+        
+        course_name = kwargs.get("course_name", metadata.get("course_name", ""))
+        topic = kwargs.get("topic", metadata.get("course_topic", ""))
+        duration_weeks = kwargs.get("duration_weeks", metadata.get("duration_weeks", ""))
+        outline = kwargs.get("outline", "")
+        course_json = kwargs.get("course_json", outline)
+        
+        merged_kwargs = {**metadata, **kwargs}
+        
+        # Pop explicit keys before calling load_prompt
+        merged_kwargs.pop("course_name", None)
+        merged_kwargs.pop("topic", None)
+        merged_kwargs.pop("duration_weeks", None)
+        merged_kwargs.pop("outline", None)
+        merged_kwargs.pop("course_json", None)
+        
         prompt, _ = load_prompt("eval_curriculum_judge.md", 
                              theme=self.theme,
                              course_name=course_name,
                              topic=topic,
                              duration_weeks=str(duration_weeks),
-                             outline=outline)
+                             outline=outline,
+                             course_json=course_json,
+                             **merged_kwargs)
         return self._run_with_retry(prompt)
 
 class CourseQualityJudgeEval(AgentBase):

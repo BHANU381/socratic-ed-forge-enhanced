@@ -94,12 +94,14 @@ def test_telemetry_loop_stats():
         "current_module": "Module 1",
         "current_submodule": "1.1",
         "active_iterations": 2,
-        "stats_passed_first_try": 5,
-        "stats_passed_after_edits": 2,
-        "stats_failed_max_iterations": 0
+        "passed_1st_iteration": 5,
+        "passed_2nd_iteration": 2,
+        "passed_3rd_iteration": 0,
+        "failed_max_iterations": 0
     }
     telemetry = TelemetryData.model_validate(data)
     assert telemetry.active_iterations == 2
-    assert telemetry.stats_passed_first_try == 5
-    assert telemetry.stats_passed_after_edits == 2
-    assert telemetry.stats_failed_max_iterations == 0
+    assert telemetry.passed_1st_iteration == 5
+    assert telemetry.passed_2nd_iteration == 2
+    assert telemetry.passed_3rd_iteration == 0
+    assert telemetry.failed_max_iterations == 0

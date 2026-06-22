@@ -6,5 +6,5 @@ Focus exclusively on the factual technical knowledge that was taught, so that fu
 
 ### SUBMODULE TO SUMMARIZE:
 ```markdown
-{content}
+{draft}
 ```
