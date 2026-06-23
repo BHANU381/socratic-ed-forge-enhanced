@@ -35,21 +35,30 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Do NOT output the submodule title or number.
 - Do NOT output any top-level (#) or second-level (##) headings.
 - Do NOT output any title-based '###' headings matching the submodule title.
-- Actively include programming code blocks (Python, SQL, HTML, etc.), formulas, or technical diagrams if the topic is even remotely technical, but ONLY if they strictly adhere to the {code_example_style} rules and `{learner_level_rules}` progression rules. If the course is non-technical, do NOT force code examples (use activities, checklists, or worked examples instead).
-- Do NOT use conversational filler or repetitive formulaic phrases (e.g., 'strategic partner', 'serves as the foundation', 'single source of truth', 'systematic approach', 'iterative workflow', 'bridges the gap').
 - Rely ONLY on the provided CONTEXT for the factual direction of the lesson. Do not hallucinate external topics.
 
-### TEMPLATE / FORMAT
-Output must strictly follow this Markdown structure. Your first output line must be exactly `### Introduction`.
+## 1. Lesson Contract and Structure
 
-### Introduction
-(10-15% of lesson. Hook the reader and explain importance. Do not repeat definitions or the title.)
+Every submodule MUST STRICTLY follow this structure using specific Markdown headings.
 
-### Core Concepts
-(40-50% of lesson. Deep dive into theory, definitions, and principles. Use precise terminology. Do not repeat facts.)
+### Hook: [Engaging 1-sentence hook here]
+- **Heading**: `### Hook: [Your hook text]` MUST be the ONLY `###` heading in the submodule.
+- **Content**: A short, engaging 1-2 sentence hook that explains why the learner should care.
 
-### Practical Application
-(25-35% of lesson. Concrete hands-on activity, workflow, exercise, or code if applicable. Do not repeat theory.)
+#### Core Idea
+- **Heading**: `#### Core Idea` (Level 4 heading)
+- **Content**: Explain the theoretical concept clearly and concisely.
 
-### Summary and Key Takeaways
-(5-10% of lesson. 3-6 concise bullet points. No new facts or long explanations.)
+#### Implementation
+- **Heading**: `#### Implementation` (Level 4 heading)
+- **Content**: Provide a practical code example, scenario, or walkthrough demonstrating the concept.
+
+#### Why it Matters
+- **Heading**: `#### Why it Matters` (Level 4 heading)
+- **Content**: A brief summary of why this concept is important and when to use it in the real world.
+
+### Structural Rules
+1. **Level 3 Heading**: You MUST output exactly ONE level-3 heading (`### Hook: ...`). Do not use any other `###` headings in the submodule.
+2. **Level 4 Headings**: The sections `Core Idea`, `Implementation`, and `Why it Matters` MUST be level-4 headings (`####`).
+3. No `##` or `#` headings are allowed inside the submodule body.
+4. No fake sections or hallucinated sections.

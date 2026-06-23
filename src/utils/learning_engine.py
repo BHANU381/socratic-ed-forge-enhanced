@@ -15,6 +15,13 @@ ERROR_DIR = os.path.join(PROJECT_ROOT, 'data', 'learning_loop', 'errors')
 FIX_DIR = os.path.join(PROJECT_ROOT, 'data', 'learning_loop', 'fixes')
 STYLE_GUIDE_FILE = os.path.join(PROJECT_ROOT, 'data', 'learning_loop', 'style_guide.json')
 
+def clear_style_guide():
+    if os.path.exists(STYLE_GUIDE_FILE):
+        try:
+            os.remove(STYLE_GUIDE_FILE)
+        except Exception as e:
+            print(f"Error removing style guide: {e}")
+
 def save_style_guide_rule_internal(new_rule_text, synthesizer):
     os.makedirs(os.path.dirname(STYLE_GUIDE_FILE), exist_ok=True)
     

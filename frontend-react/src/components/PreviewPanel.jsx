@@ -33,8 +33,8 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-auto px-12 py-12 scroll-smooth min-h-0 min-w-0 custom-scrollbar" ref={containerRef}>
-        <div className="max-w-4xl mx-auto prose prose-invert prose-zinc">
+      <div className="flex-1 overflow-auto py-12 px-4 md:px-8 lg:px-12 scroll-smooth min-h-0 min-w-0 custom-scrollbar flex flex-col items-center" ref={containerRef}>
+        <div className="w-full max-w-3xl prose prose-invert prose-zinc prose-p:text-justify prose-li:text-justify">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {preview}
           </ReactMarkdown>

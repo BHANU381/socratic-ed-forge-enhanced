@@ -236,18 +236,22 @@ div.stButton > button[kind="secondary"]:hover {
     background-color: #17122D !important;
     border: 1px solid #2A1E3E !important;
     border-radius: 12px !important;
-    padding: 2rem !important;
+    padding: 3rem 4rem !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
     font-family: 'Fira Sans', sans-serif !important;
     line-height: 1.7 !important;
     height: 780px !important;
     overflow-y: auto !important;
     color: #E2E8F0 !important;
+    max-width: 900px !important;
+    margin: 0 auto !important;
+    text-align: justify !important;
 }
 .preview-paper h1, .preview-paper h2, .preview-paper h3 {
     font-family: 'Fira Sans', sans-serif !important;
     color: #F5F3FF !important;
     margin-top: 1.5rem !important;
+    text-align: left !important;
 }
 
 /* File Uploader override */
@@ -316,6 +320,15 @@ tpm_limit = st.sidebar.number_input(
     step=10000,
     help="Maximum cumulative token count allowed per minute."
 )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🎓 Pedagogical Controls")
+learner_level = st.sidebar.selectbox("Learner Level", ["beginner", "intermediate", "advanced"], index=0)
+code_example_style = st.sidebar.selectbox("Code Example Style", ["progressive_production", "minimal", "practical", "production_first"], index=0)
+explanation_depth = st.sidebar.selectbox("Explanation Depth", ["balanced", "concise", "deep"], index=0)
+quality_profile = st.sidebar.selectbox("Quality Profile", ["standard", "light", "textbook"], index=0)
+resume_run = st.sidebar.checkbox("🔄 Resume from last incomplete session", value=False)
+st.sidebar.markdown("---")
 
 # Debugging info
 with st.expander("🔍 Debug Path Information"):
@@ -555,8 +568,16 @@ else:
                 os.makedirs(INPUT_DIR, exist_ok=True)
                 try:
                     file_bytes = uploaded_file.getvalue()
-                    with open(os.path.join(INPUT_DIR, "course_input.json"), "wb") as f:
-                        f.write(file_bytes)
+                    data = json.loads(file_bytes.decode('utf-8'))
+                    
+                    # Inject custom parameters from select boxes
+                    data["learner_level"] = learner_level
+                    data["code_example_style"] = code_example_style
+                    data["explanation_depth"] = explanation_depth
+                    data["quality_profile"] = quality_profile
+                    
+                    with open(os.path.join(INPUT_DIR, "course_input.json"), "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=4)
                     
                     # Reset telemetry on start
                     init_telemetry = {
@@ -589,6 +610,7 @@ else:
                 env["PYTHONPATH"] = PROJECT_ROOT
                 env["RPM_LIMIT"] = str(rpm_limit)
                 env["TPM_LIMIT"] = str(tpm_limit)
+                env["RUN_TYPE"] = "resume_existing_run" if resume_run else "new_run"
                 
                 process = subprocess.Popen(
                     ["python", "-m", "src.engine.orchestrator"], 

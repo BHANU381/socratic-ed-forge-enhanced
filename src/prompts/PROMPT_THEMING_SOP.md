@@ -1,29 +1,95 @@
-# Prompt Theming Standard Operating Procedure (SOP)
+# Prompt Theming SOP
 
-This guide explains how to create and manage dynamic themes for the Agentic Course Loop.
+The `Socratic Ed-Forge` engine supports fully swappable prompt themes. A "theme" dictates the persona, structure, formatting rules, and evaluation criteria the agents use to write course content.
 
-## What is a Theme?
-A "theme" is simply a folder inside `src/prompts/` (e.g., `src/prompts/default/` or `src/prompts/beginner_friendly/`). It contains a set of Markdown files that define the persona, tone, rules, and structure for the AI agents (Generator, Editor, Critic, etc.).
+## 1. Directory Structure
 
-## How to Create a New Theme
-1. **Create a Folder:** Make a new folder in `src/prompts/` (e.g., `src/prompts/advanced_math/`).
-2. **Copy Base Files:** Copy all the `.md` files from `src/prompts/default/` into your new folder.
-3. **Customize Tone:** Edit the `.md` files to instruct the AI to use a specific tone (e.g., highly academic, beginner-friendly, sarcastic, etc.).
-4. **Define Structure (Dynamic Validation):** 
-   You do not need to edit Python code to change the course structure. Instead, open `content_generator.md` in your new theme and define the required headings at the very top of the file:
+To create a new theme, create a new directory inside `src/prompts/` (e.g., `src/prompts/my_theme/`).
 
-   ```markdown
-   ### VALIDATION RULES (SYSTEM USE ONLY - DO NOT SEND TO LLM)
-   REQUIRED_HEADINGS:
-   - ### Introduction
-   - ### Theory
-   - ### Practice
-   ------------------------------------------------------------
-   ```
-   *Note: Ensure the separator line `------------------------------------------------------------` is exactly 60 dashes.*
+Inside your theme directory, you **must** provide the following five files:
 
-5. **Update Editor & Critic:** If you changed the headings in `content_generator.md`, make sure you update `editor.md` and `critic.md` in your theme to enforce those exact same headings. The Critic needs to know what structure to demand, and the Editor needs to know how to fix it if it's wrong.
+1. `contract.json` - Defines the structural validation rules.
+2. `content_generator.md` - The system prompt for the Content Generator agent.
+3. `semantic_evaluator.md` - The system prompt for the Semantic Evaluator agent.
+4. `patch_editor.md` - The system prompt for the Patch Editor agent.
+5. `archivist.md` - The system prompt for the Archivist agent.
 
-## How it Works Under the Hood
-When the Python backend loads `content_generator.md`, the `prompt_loader.py` utility reads the `REQUIRED_HEADINGS` block, extracts the list of headings, and completely strips the validation block before sending the prompt to the LLM. 
-The extracted headings are then passed dynamically to the `validate_draft()` and `normalize_draft()` functions in `orchestrator.py`.
+---
+
+## 2. Writing `contract.json`
+
+The `contract.json` file dictates the required sections, headings, and minimum word counts. The Orchestrator STRICTLY enforces this contract against the generated Markdown. If the generator violates this contract, the submodule fails validation.
+
+### Basic Structure
+
+```json
+{
+  "lesson_contract_name": "my_custom_lesson",
+  "sections": [
+    {
+      "title": "Introduction",
+      "aliases": ["Intro", "Getting Started"],
+      "required": true,
+      "min_words": 50
+    },
+    {
+      "title": "Core Concepts",
+      "aliases": ["Theory"],
+      "required": true,
+      "min_words": 100
+    }
+  ]
+}
+```
+
+### Advanced Hierarchical Rules
+
+If your theme requires a strict hierarchical structure (e.g., specific H3s and nested H4s), you can add `heading_rules`.
+
+```json
+{
+  "lesson_contract_name": "ottolearn",
+  "heading_rules": {
+    "submodule_heading_level": 3,
+    "main_content_heading": {
+      "canonical": "Hook",
+      "required_level": 3,
+      "must_be_unique_per_submodule": true
+    },
+    "required_child_section_level": 4,
+    "optional_child_section_level": 4,
+    "walkthrough_step_level": 4
+  },
+  "sections": [
+    {
+      "title": "Hook",
+      "aliases": ["Hook"],
+      "required": true,
+      "required_level": 3,
+      "min_words": 10
+    },
+    {
+      "title": "Core Idea",
+      "aliases": ["The Concept"],
+      "required": true,
+      "required_level": 4,
+      "min_words": 50
+    }
+  ]
+}
+```
+
+- **`required_level`**: If set on a section, the validator ensures the heading is exactly that level (e.g., 3 means `###`).
+- **`must_be_unique_per_submodule`**: If set to `true`, the validator will throw a blocker if more than one heading at the specified level exists. (Useful for enforcing exactly one `###` heading).
+
+---
+
+## 3. Writing the Prompts
+
+- Ensure your `content_generator.md` instructs the LLM to output EXACTLY the headings defined in `contract.json`. Do not leave ambiguity.
+- The `semantic_evaluator.md` should rely on the `{lesson_contract}` interpolation string to evaluate the structure dynamically. Do not hardcode structure rules in the evaluator prompt.
+- The `patch_editor.md` should be capable of handling fixes for the structures you defined.
+
+## 4. Usage
+
+To run the pipeline using your new theme, simply specify `prompt_theme="my_theme"` in the `CourseInput`.

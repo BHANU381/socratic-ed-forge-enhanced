@@ -105,3 +105,101 @@ def test_telemetry_loop_stats():
     assert telemetry.passed_2nd_iteration == 2
     assert telemetry.passed_3rd_iteration == 0
     assert telemetry.failed_max_iterations == 0
+
+def test_new_refactor_schemas():
+    """TDD Test: Verify importing and validating new schemas for the general-purpose course engine."""
+    from src.models.schemas import (
+        ValidationIssue,
+        ValidationResult,
+        SectionRequirement,
+        LessonContract,
+        QualityProfile,
+        RunManifest
+    )
+    
+    # Test QualityProfile enum/literal
+    # QualityProfile should support light, standard, textbook
+    assert QualityProfile.LIGHT == "light"
+    assert QualityProfile.STANDARD == "standard"
+    assert QualityProfile.TEXTBOOK == "textbook"
+
+    # Test ValidationIssue
+    issue_data = {
+        "severity": "blocker",
+        "issue_type": "missing_heading",
+        "message": "Heading # Exercises is missing",
+        "section": "Exercises"
+    }
+    issue = ValidationIssue.model_validate(issue_data)
+    assert issue.severity == "blocker"
+    assert issue.section == "Exercises"
+
+    # Test ValidationResult
+    res_data = {
+        "passed": False,
+        "issues": [issue_data],
+        "detected_headings": ["Introduction", "Theory"]
+    }
+    result = ValidationResult.model_validate(res_data)
+    assert not result.passed
+    assert len(result.issues) == 1
+    assert result.issues[0].severity == "blocker"
+
+    # Test SectionRequirement and LessonContract
+    contract_data = {
+        "sections": [
+            {
+                "title": "Introduction",
+                "aliases": ["Intro", "Getting Started"],
+                "min_words": 50,
+                "required": True
+            },
+            {
+                "title": "Optional Details",
+                "required": False
+            }
+        ]
+    }
+    contract = LessonContract.model_validate(contract_data)
+    assert len(contract.sections) == 2
+    assert contract.sections[0].aliases == ["Intro", "Getting Started"]
+    assert contract.sections[1].required is False
+
+    # Test TelemetryData extensions (per_agent_tokens, patch_attempts, failure_reasons)
+    from src.models.schemas import TelemetryData
+    telemetry_data = {
+        "status": "approved",
+        "progress_percent": 100,
+        "current_agent": "PatchEditor",
+        "total_tokens": 1500,
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "model_name": "gemini-1.5-pro",
+        "current_module": "Module 1",
+        "current_submodule": "1.1",
+        "per_agent_tokens": {
+            "content_generator": 800,
+            "semantic_evaluator": 400,
+            "patch_editor": 300
+        },
+        "patch_attempts": 1,
+        "failure_reasons": ["missing heading"]
+    }
+    telemetry = TelemetryData.model_validate(telemetry_data)
+    assert telemetry.per_agent_tokens["content_generator"] == 800
+    assert telemetry.patch_attempts == 1
+    assert "missing heading" in telemetry.failure_reasons
+
+    # Test RunManifest
+    manifest_data = {
+        "course_id": "course-123",
+        "topic": "Python Programming",
+        "lesson_contract": contract_data,
+        "quality_profile": "standard",
+        "completed_submodules": ["1.1", "1.2"]
+    }
+    manifest = RunManifest.model_validate(manifest_data)
+    assert manifest.course_id == "course-123"
+    assert manifest.quality_profile == "standard"
+    assert len(manifest.completed_submodules) == 2
+

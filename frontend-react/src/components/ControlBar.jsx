@@ -10,6 +10,11 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [tpm, setTpm]           = useState(250000)
   const [themes, setThemes]     = useState(["default"])
   const [selectedTheme, setSelectedTheme] = useState("default")
+  const [learnerLevel, setLearnerLevel] = useState("beginner")
+  const [codeStyle, setCodeStyle]       = useState("progressive_production")
+  const [expDepth, setExpDepth]         = useState("balanced")
+  const [qualityProfile, setQualityProfile] = useState("standard")
+  const [resume, setResume]             = useState(false)
   const fileInputRef            = useRef(null)
 
   useEffect(() => {
@@ -37,6 +42,11 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
       fd.append('rpm_limit', rpm.toString())
       fd.append('tpm_limit', tpm.toString())
       fd.append('prompt_theme', selectedTheme)
+      fd.append('learner_level', learnerLevel)
+      fd.append('code_example_style', codeStyle)
+      fd.append('explanation_depth', expDepth)
+      fd.append('quality_profile', qualityProfile)
+      fd.append('resume', resume.toString())
       const res = await fetch('/api/start', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
@@ -146,6 +156,74 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="flex gap-2 w-full">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Learner Level</label>
+                <select
+                  value={learnerLevel}
+                  onChange={e => setLearnerLevel(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                </select>
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Code Style</label>
+                <select
+                  value={codeStyle}
+                  onChange={e => setCodeStyle(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  <option value="progressive_production">Progressive Prod</option>
+                  <option value="minimal">Minimal</option>
+                  <option value="practical">Practical</option>
+                  <option value="production_first">Production First</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 w-full">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Exp. Depth</label>
+                <select
+                  value={expDepth}
+                  onChange={e => setExpDepth(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  <option value="balanced">Balanced</option>
+                  <option value="concise">Concise</option>
+                  <option value="deep">Deep</option>
+                </select>
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Quality Profile</label>
+                <select
+                  value={qualityProfile}
+                  onChange={e => setQualityProfile(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  <option value="standard">Standard</option>
+                  <option value="light">Light</option>
+                  <option value="textbook">Textbook</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-1">
+              <input
+                id="resume-checkbox"
+                type="checkbox"
+                checked={resume}
+                onChange={e => setResume(e.target.checked)}
+                className="rounded border-zinc-800 bg-zinc-900/50 text-zinc-200 focus:ring-zinc-500 h-3.5 w-3.5"
+              />
+              <label htmlFor="resume-checkbox" className="text-xs text-muted-foreground cursor-pointer select-none">
+                Resume from last incomplete session
+              </label>
             </div>
 
             <button 

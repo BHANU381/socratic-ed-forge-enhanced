@@ -46,3 +46,58 @@ def test_agent_initialization_logic():
     from src.agents.core import ContentGenerator
     gen = ContentGenerator("Test Generator")
     assert gen.role == "Test Generator"
+
+def test_semantic_evaluator_agent():
+    """Test that SemanticEvaluator parses mock API output correctly and handles errors."""
+    from src.agents.core import SemanticEvaluator
+    from src.models.schemas import ValidationResult
+    
+    evaluator = SemanticEvaluator()
+    assert evaluator.role == "semantic-evaluator"
+    assert evaluator.response_schema == ValidationResult
+    
+    # Mock self._run_with_retry to simulate successful evaluator feedback
+    evaluator._run_with_retry = MagicMock(return_value='{"passed": true, "issues": []}')
+    
+    res = evaluator.evaluate(
+        draft="Some draft",
+        lesson_contract="Some contract",
+        course_topic="Python",
+        submodule_title="Variables"
+    )
+    assert isinstance(res, ValidationResult)
+    assert res.passed
+    assert len(res.issues) == 0
+    
+    # Mock error case (invalid JSON)
+    evaluator._run_with_retry = MagicMock(return_value='Invalid JSON!')
+    res = evaluator.evaluate(
+        draft="Some draft",
+        lesson_contract="Some contract",
+        course_topic="Python",
+        submodule_title="Variables"
+    )
+    assert isinstance(res, ValidationResult)
+    assert not res.passed
+    assert len(res.issues) == 1
+    assert res.issues[0].issue_type == "json_parse_error"
+
+def test_patch_editor_agent():
+    """Test that PatchEditor passes parameters correctly and returns output."""
+    from src.agents.core import PatchEditor
+    
+    editor = PatchEditor()
+    assert editor.role == "patch-editor"
+    
+    editor._run_with_retry = MagicMock(return_value='{"operation": "replace_section", "target_heading": "Introduction", "replacement_markdown": "New patched content", "reason": "Fixed"}')
+    res = editor.edit_patch(
+        draft="Old content",
+        feedback="Missing stuff",
+        heading="Introduction",
+        course_topic="Python",
+        submodule_title="Variables"
+    )
+    from src.models.schemas import PatchResult
+    assert isinstance(res, PatchResult)
+    assert res.replacement_markdown == "New patched content"
+

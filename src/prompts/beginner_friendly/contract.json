@@ -1,0 +1,41 @@
+{
+  "lesson_contract_name": "standard_lesson",
+  "sections": [
+    {
+      "title": "Introduction",
+      "aliases": [
+        "Intro",
+        "Getting Started"
+      ],
+      "min_words": 100,
+      "required": true
+    },
+    {
+      "title": "Core Concepts",
+      "aliases": [
+        "Concepts",
+        "Theory"
+      ],
+      "min_words": 200,
+      "required": true
+    },
+    {
+      "title": "Practical Example",
+      "aliases": [
+        "Example",
+        "Walkthrough"
+      ],
+      "min_words": 150,
+      "required": true
+    },
+    {
+      "title": "Summary and Key Takeaways",
+      "aliases": [
+        "Takeaways",
+        "Summary"
+      ],
+      "min_words": 50,
+      "required": true
+    }
+  ]
+}

@@ -52,3 +52,24 @@ You are a helpful assistant."""
     assert "VALIDATION RULES" not in content
     assert "REQUIRED_HEADINGS" not in content
     assert "You are a helpful assistant." in content
+
+def test_semantic_evaluator_prompt_bans_word_count():
+    """Validates that the semantic evaluator explicitly bans word count or length blockers."""
+    # We will pass dummy strings for all the format variables
+    dummy_kwargs = {
+        "course_topic": "test",
+        "submodule_title": "test",
+        "learner_level": "test",
+        "code_example_style": "test",
+        "explanation_depth": "test",
+        "module_position": "test",
+        "lesson_contract": "test",
+        "running_summary": "test",
+        "draft": "test"
+    }
+    content, _ = load_prompt("semantic_evaluator.md", theme="default", **dummy_kwargs)
+    
+    # We expect a clear instruction prohibiting word count blockers
+    assert "word count" in content.lower()
+    assert "minimum words" in content.lower()
+    assert "deterministic validator" in content.lower()

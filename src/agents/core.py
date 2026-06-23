@@ -83,6 +83,34 @@ def _extract_course_metadata(course_info=None, **kwargs) -> dict:
     
     return metadata
 
+def _get_learner_level_rules(learner_level: str) -> str:
+    rules = {
+        "beginner": (
+            "BEGINNER RULES:\n"
+            "- Start with intuition and simple explanations.\n"
+            "- Define all technical terms before using them heavily.\n"
+            "- Avoid dense jargon, complex formulas, and unexplained architecture language.\n"
+            "- Code progression must be step-by-step: start tiny, explain gradually.\n"
+            "- Do not jump to framework-specific implementation or production-first code immediately."
+        ),
+        "intermediate": (
+            "INTERMEDIATE RULES:\n"
+            "- Assume basic familiarity with the topic and move faster than a beginner course.\n"
+            "- Introduce practical patterns, trade-offs, and common mistakes earlier.\n"
+            "- Explain why one approach is better than another.\n"
+            "- Include moderate implementation details, simple classes, basic validation, and realistic examples.\n"
+            "- Avoid over-explaining basic concepts."
+        ),
+        "advanced": (
+            "ADVANCED RULES:\n"
+            "- Focus on architecture, internals, trade-offs, and precise technical terminology.\n"
+            "- Include failure modes, edge cases, scaling concerns, and security implications where relevant.\n"
+            "- Use production-grade examples quickly, discussing system-level design decisions.\n"
+            "- Avoid unnecessary beginner explanations and toy examples unless used briefly to introduce a concept."
+        )
+    }
+    return rules.get((learner_level or "").lower(), rules["beginner"])
+
 class AgentBase:
     """Base class for all agents with built-in error handling, pacing, and learning."""
     def __init__(self, role, model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
@@ -312,12 +340,22 @@ class ContentGenerator(AgentBase):
             
         merged_kwargs = {**metadata, **kwargs}
         
+        # Inject dynamic rules
+        learner_level = merged_kwargs.get("learner_level", "beginner")
+        if "learner_level_rules" not in merged_kwargs:
+            merged_kwargs["learner_level_rules"] = _get_learner_level_rules(learner_level)
+            
         merged_kwargs.pop("sub_title", None)
         merged_kwargs.pop("submodule_title", None)
         merged_kwargs.pop("module_title", None)
         merged_kwargs.pop("content_context", None)
         merged_kwargs.pop("learning_context_block", None)
         merged_kwargs.pop("running_summary", None)
+        
+        merged_kwargs.setdefault("learner_level", "beginner")
+        merged_kwargs.setdefault("code_example_style", "progressive_production")
+        merged_kwargs.setdefault("explanation_depth", "balanced")
+        merged_kwargs.setdefault("module_position", "")
 
         prompt, self.required_headings = load_prompt("content_generator.md", 
                              theme=self.theme,
@@ -331,6 +369,12 @@ class ContentGenerator(AgentBase):
         return self._run_with_retry(prompt)
 
 class Archivist(AgentBase):
+    def __init__(self, role="archivist", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are an expert technical archivist. You must return only valid JSON matching the exact schema."
+        from src.models.schemas import ArchivistResponse
+        self.response_schema = ArchivistResponse
+
     def compress_submodule(self, content, course_info=None, **kwargs):
         metadata = _extract_course_metadata(course_info, **kwargs)
         merged_kwargs = {**metadata, **kwargs}
@@ -346,16 +390,29 @@ class Archivist(AgentBase):
         merged_kwargs.pop("submodule_title", None)
         merged_kwargs.pop("running_summary", None)
         
+        module_id = kwargs.get("module_id", "module_1")
+        submodule_id = kwargs.get("submodule_id", "submodule_1.1")
+        
         prompt, _ = load_prompt("archivist.md", 
                              theme=self.theme,
                              content=content,
                              approved_lesson=content,
+                             draft=content,
                              module_title=module_title,
                              sub_title=sub_title,
                              submodule_title=sub_title,
                              running_summary=running_summary,
+                             module_id=module_id,
+                             submodule_id=submodule_id,
                              **merged_kwargs)
-        return self._run_with_retry(prompt)
+        raw_res = self._run_with_retry(prompt)
+        try:
+            from src.models.schemas import ArchivistResponse
+            response_obj = ArchivistResponse.model_validate_json(raw_res)
+            return response_obj.summary
+        except Exception as e:
+            log_event("Archivist", f"Error parsing ArchivistResponse JSON: {e}. Raw: {raw_res}")
+            return raw_res
 
 class Critic(AgentBase):
     def critique(self, draft, content_context, course_info=None, **kwargs):
@@ -658,4 +715,96 @@ class CourseQualityJudgeEval(AgentBase):
                              theme=self.theme,
                              compiled_course=compiled_course)
         return self._run_with_retry(prompt)
+
+class SemanticEvaluator(AgentBase):
+    def __init__(self, role="semantic-evaluator", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are a strict semantic evaluator. You must return only valid JSON matching the exact schema."
+        from src.models.schemas import ValidationResult
+        self.response_schema = ValidationResult
+
+    def evaluate(self, draft, lesson_contract, course_topic, submodule_title, running_summary="", **kwargs):
+        kwargs.setdefault("learner_level", "beginner")
+        kwargs.setdefault("code_example_style", "progressive_production")
+        kwargs.setdefault("explanation_depth", "balanced")
+        kwargs.setdefault("module_position", "")
+
+        prompt, _ = load_prompt("semantic_evaluator.md",
+                             theme=self.theme,
+                             draft=draft,
+                             lesson_contract=lesson_contract,
+                             course_topic=course_topic,
+                             submodule_title=submodule_title,
+                             running_summary=running_summary,
+                             **kwargs)
+        response_text = self._run_with_retry(prompt)
+        
+        # Parse and validate as ValidationResult
+        from src.models.schemas import ValidationResult, ValidationIssue
+        try:
+            data = json.loads(response_text)
+            return ValidationResult.model_validate(data)
+        except Exception as e:
+            # Fallback for failed parse
+            return ValidationResult(
+                passed=False,
+                issues=[
+                    ValidationIssue(
+                        severity="blocker",
+                        issue_type="json_parse_error",
+                        message=f"Failed to parse SemanticEvaluator JSON response: {str(e)}. Raw response: {response_text}",
+                        section=None
+                    )
+                ]
+            )
+
+class PatchEditor(AgentBase):
+    def __init__(self, role="patch-editor", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are an expert Patch Editor. You must return only valid JSON matching the exact schema."
+        from src.models.schemas import PatchResult
+        self.response_schema = PatchResult
+
+    def edit_patch(self, draft, feedback, heading, course_topic, submodule_title, **kwargs):
+        kwargs.setdefault("learner_level", "beginner")
+        kwargs.setdefault("code_example_style", "progressive_production")
+        kwargs.setdefault("explanation_depth", "balanced")
+        kwargs.setdefault("module_position", "")
+        kwargs.setdefault("patch_mode", "fix_structure")
+
+        prompt, _ = load_prompt("patch_editor.md",
+                             theme=self.theme,
+                             draft=draft,
+                             feedback=feedback,
+                             heading=heading,
+                             course_topic=course_topic,
+                             submodule_title=submodule_title,
+                             **kwargs)
+        raw_res = self._run_with_retry(prompt)
+        
+        from src.models.schemas import PatchResult
+        try:
+            # Strip code blocks if present
+            clean_res = raw_res.strip()
+            if clean_res.startswith("```json"):
+                clean_res = clean_res[7:]
+            elif clean_res.startswith("```"):
+                clean_res = clean_res[3:]
+            if clean_res.endswith("```"):
+                clean_res = clean_res[:-3]
+            clean_res = clean_res.strip()
+            
+            # Try parsing via json/model_validate
+            data = json.loads(clean_res)
+            return PatchResult.model_validate(data)
+        except Exception as e:
+            from src.utils.logger import log_event
+            log_event("PatchEditor", f"Error parsing PatchResult JSON: {e}. Raw: {raw_res}")
+            return PatchResult(
+                operation="no_safe_patch",
+                target_heading=heading,
+                replacement_markdown="",
+                reason=f"Failed to parse PatchEditor JSON: {str(e)}"
+            )
+
 

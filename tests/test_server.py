@@ -110,3 +110,53 @@ def test_api_start_rejects_invalid_theme_name(monkeypatch):
     assert response.status_code == 422
     assert "Schema Validation Failed" in response.json()["detail"]
 
+
+def test_start_pipeline_with_custom_controls(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.server.INPUT_DIR", tmp_path)
+    monkeypatch.setattr("backend.server._get_pid", lambda: None)
+    
+    valid_data = {
+        "course_name": "Test Custom",
+        "topic": "Testing Custom Controls",
+        "duration_weeks": 2,
+        "modules": []
+    }
+    
+    from unittest.mock import MagicMock
+    mock_proc = MagicMock()
+    mock_proc.pid = 98765
+    captured_env = {}
+    
+    def mock_popen(args, env, **kwargs):
+        nonlocal captured_env
+        captured_env = env
+        return mock_proc
+        
+    monkeypatch.setattr("backend.server.subprocess.Popen", mock_popen)
+    
+    response = client.post(
+        "/api/start",
+        files={"file": ("course_input.json", json.dumps(valid_data).encode("utf-8"), "application/json")},
+        data={
+            "learner_level": "advanced",
+            "code_example_style": "minimal",
+            "explanation_depth": "deep",
+            "quality_profile": "textbook",
+            "resume": "true"
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.json() == {"status": "started", "pid": 98765}
+    
+    # Verify written file content contains custom parameters
+    written_file = tmp_path / "course_input.json"
+    assert written_file.exists()
+    written_data = json.loads(written_file.read_text())
+    assert written_data["learner_level"] == "advanced"
+    assert written_data["code_example_style"] == "minimal"
+    assert written_data["explanation_depth"] == "deep"
+    assert written_data["quality_profile"] == "textbook"
+    
+    # Verify RUN_TYPE env is passed as resume_existing_run
+    assert captured_env.get("RUN_TYPE") == "resume_existing_run"

@@ -101,6 +101,15 @@ def _cleanup_after_stop():
 def get_latest_book() -> Optional[Path]:
     session_dirs = sorted(OUTPUT_DIR.glob("session_*"), key=lambda p: p.stat().st_mtime, reverse=True)
     for sd in session_dirs:
+        manifest_file = sd / "run_manifest.json"
+        if manifest_file.exists():
+            try:
+                with open(manifest_file, "r", encoding="utf-8") as f:
+                    m_data = json.load(f)
+                if m_data.get("run_type") == "test_run":
+                    continue
+            except Exception:
+                pass
         live = sd / "live_preview.md"
         if live.exists():
             return live
@@ -198,7 +207,12 @@ async def start_pipeline(
     file: UploadFile = File(...),
     rpm_limit: Optional[int] = Form(None),
     tpm_limit: Optional[int] = Form(None),
-    prompt_theme: Optional[str] = Form(None)
+    prompt_theme: Optional[str] = Form(None),
+    learner_level: Optional[str] = Form(None),
+    code_example_style: Optional[str] = Form(None),
+    explanation_depth: Optional[str] = Form(None),
+    quality_profile: Optional[str] = Form(None),
+    resume: Optional[bool] = Form(None)
 ):
     pid = _get_pid()
     if pid and _is_running(pid):
@@ -210,6 +224,15 @@ async def start_pipeline(
         data = json.loads(file_bytes)  # Validate JSON
         if prompt_theme is not None:
             data["prompt_theme"] = prompt_theme
+        if learner_level is not None:
+            data["learner_level"] = learner_level
+        if code_example_style is not None:
+            data["code_example_style"] = code_example_style
+        if explanation_depth is not None:
+            data["explanation_depth"] = explanation_depth
+        if quality_profile is not None:
+            data["quality_profile"] = quality_profile
+            
         # Validate schema using Pydantic
         from src.models.schemas import CourseInput
         CourseInput.model_validate(data)
@@ -252,6 +275,7 @@ async def start_pipeline(
 
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
+    env["RUN_TYPE"] = "resume_existing_run" if resume else "new_run"
     if rpm_limit is not None:
         env["RPM_LIMIT"] = str(rpm_limit)
     if tpm_limit is not None:

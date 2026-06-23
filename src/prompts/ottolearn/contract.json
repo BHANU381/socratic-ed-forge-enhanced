@@ -1,0 +1,44 @@
+{
+  "lesson_contract_name": "ottolearn",
+  "heading_rules": {
+    "submodule_heading_level": 3,
+    "main_content_heading": {
+      "canonical": "Hook",
+      "required_level": 3,
+      "must_be_unique_per_submodule": true
+    },
+    "required_child_section_level": 4,
+    "optional_child_section_level": 4,
+    "walkthrough_step_level": 4
+  },
+  "sections": [
+    {
+      "title": "Hook",
+      "aliases": ["Hook"],
+      "required": true,
+      "required_level": 3,
+      "min_words": 10
+    },
+    {
+      "title": "Core Idea",
+      "aliases": ["Core Concept", "The Concept"],
+      "required": true,
+      "required_level": 4,
+      "min_words": 50
+    },
+    {
+      "title": "Implementation",
+      "aliases": ["How it Works", "Example", "Code Example"],
+      "required": true,
+      "required_level": 4,
+      "min_words": 50
+    },
+    {
+      "title": "Why it Matters",
+      "aliases": ["Takeaway", "Summary"],
+      "required": true,
+      "required_level": 4,
+      "min_words": 20
+    }
+  ]
+}

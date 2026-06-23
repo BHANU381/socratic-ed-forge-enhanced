@@ -25,3 +25,7 @@ def test_theme_beginner_friendly():
 def test_theme_general():
     """Verify that general theme runs the orchestrator loop without crashes."""
     run_verification("general")
+
+def test_theme_ottolearn():
+    """Verify that ottolearn theme runs the orchestrator loop without crashes."""
+    run_verification("ottolearn")
