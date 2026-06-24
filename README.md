@@ -2,7 +2,7 @@
 
 **Socratic Ed-Forge** is a professional-grade, agentic AI engine designed to automate the production of high-quality, textbook-ready educational content. 
 
-Using a sophisticated **Reflective Loop** (Generator $\rightarrow$ Critic $\rightarrow$ Editor), the engine ensures that every module produced meets strict academic standards for technical accuracy, depth, and structural integrity.
+Using a strict **Deterministic Validation Flow**, the engine replaces unpredictable LLM critique loops with rigid structural rules and targeted semantic evaluation, ensuring every module produced meets strict academic standards without hallucinations.
 
 ## ✨ Key Features & New Updates
 * **Premium Dark Glassmorphism UI:** A stunning, fully responsive dashboard built with React, Vite, and Shadcn UI. Features frosted glass cards, dynamic background gradients, and native resizable sidebars.
@@ -10,26 +10,24 @@ Using a sophisticated **Reflective Loop** (Generator $\rightarrow$ Critic $\righ
 * **Decoupled Architecture:** 
   * **Frontend:** Lightning-fast React SPA running on Vite.
   * **Backend:** Robust FastAPI orchestrator managing the asynchronous AI agent loop.
-* **Synthesized Style-Guide Engine (Self-Learning):** Replaces raw experience replay. Condenses errors into single-sentence rules (`style_guide.json`) to slash prompt context bloat by 97.5% and prevent rate limits.
+* **Deterministic Validation Flow:** Replaces unpredictable multi-agent critique (Critic/Editor/Fact-Checker) with a deterministic Python ruleset that strictly enforces markdown headers, structure, and semantic templates.
 * **Knowledge Architect Wiki:** An autonomous, AI-readable Markdown knowledge base (`wiki/`) enforcing a strict Schema structure, frontmatter tracking, and deep linking for codebase documentation.
 * **Prompt Modularization:** Hardcoded AI instructions extracted into clean, maintainable Markdown files inside `src/prompts/`.
 * **Context-Grounded Generation:** Grounded lesson generation driven by a structured submodule schema containing both `title` and `content_context` (Curriculum Context).
-* **Reflective Agentic Loop:** Employs a multi-agent architecture where a **Critic** challenges the **Generator**, a **Fact-Checker** audits technical accuracy, and an **Editor** refines the content.
+* **Semantic Evaluation & Targeted Patching:** Instead of rewriting entire documents, a **Semantic Evaluator** audits drafts against pedagogical constraints, and a **Patch Editor** surgically fixes broken sections.
 * **Topic Isolation & Heading Deduplication:** Ensures submodules do not leak context into each other and programmatically sanitizes top-level headings to prevent duplicate formatting.
-* **Dual-Librarian Architecture:** An **Internal Librarian** operates within the loop to enforce strict markdown compliance per submodule, and a **Global Librarian** performs a full-book parse at the end of the course to verify global structure and Table of Contents.
+* **Archival State Management:** An **Archivist** compresses full lessons into high-fidelity summaries to provide continuous learning context without blowing up the token window.
 * **Automated Testing Suite:** Comprehensive suite of Mocked Unit Tests (free, fast, token-less) and Integration Tests inside the `tests/` folder using `pytest` and `MagicMock`.
 * **LLM Context Anchors:** Persistent `LLM_CONTEXT.md` documentation acting as the architectural brain for AI agents working on the codebase.
 ## 🏗️ Architecture
 
-The engine operates on a sophisticated **multi-stage validation pipeline**:
+The engine operates on a strict **deterministic validation pipeline**:
 
 1.  **Generator:** Drafts the initial technical content based on the input schema.
-2.  **Deterministic Validation Gate:** Checks structural layout (headers, duplicates) programmatically.
-3.  **Critic:** Audits the draft for technical accuracy, academic tone, and depth of explanation.
-4.  **Fact-Checker:** If the Critic approves, this agent performs a deep audit to identify technical hallucinations or incorrect code.
-5.  **Internal Librarian:** Audits the structural formatting and markdown tags of the draft.
-6.  **Editor:** If the Critic, Fact-Checker, or Internal Librarian identifies issues, the Editor rewrites the draft based on specific feedback.
-7.  **Global Librarian:** Performs a single final pass on the fully compiled book to ensure macroscopic structural integrity and Table of Contents alignment.
+2.  **Semantic Evaluator:** Critiques the draft specifically for pedagogical constraints and structural alignment.
+3.  **Patch Editor:** Rewrites specific broken sections of the draft based on semantic critique instead of regenerating the entire file.
+4.  **Archivist:** Summarizes completed lessons into a concise state to pass as context to the next generation step.
+5.  **Validation Gate (Deterministic):** Not an AI agent, but a deterministic Python script that strictly checks if the draft conforms to structural requirements (e.g., enforcing exact headers and markdown structures) before saving to the master file.
 
 ## 🛠️ Installation & Setup
 

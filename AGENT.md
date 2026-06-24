@@ -18,13 +18,23 @@ To set up the environment for autonomous execution:
 2. Note: Do not commit the `venv/` directory. It is already properly excluded in `.gitignore`.
 
 ## 3. Running the Test Suite
-We practice Test-Driven Development (TDD). Do not write production code without writing a failing test first.
+We strictly practice Test-Driven Development (TDD). Do not write production code without writing a failing test first.
 
-To run the tests autonomously, use the explicit path to the virtual environment's executable to ensure dependencies are loaded correctly:
+> [!WARNING]
+> **CRITICAL**: Do NOT just run `pytest`. Using the global `pytest` command can lead to extreme slowdowns, false failures, missing dependencies, and faulty task execution.
+
+To run the tests autonomously, you **MUST** use the explicit path to the virtual environment's Python executable. This ensures all local dependencies are loaded correctly:
+
 ```powershell
 .\venv\Scripts\python.exe -m pytest tests/
 ```
-Ensure that **all tests pass (0 warnings, 0 errors)** before completing any task.
+
+If you encounter `ModuleNotFoundError` during tests, you likely forgot to install the dependencies in the virtual environment. Fix it by running:
+```powershell
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Ensure that **all tests pass (0 warnings, 0 errors)** before completing any task. If a test crashes, you must fix it before proceeding. Do not assume the system is fine if the test suite fails to complete.
 
 ## 4. General Guidelines
 - Do not make changes to `.gitignore` regarding environment folders as they are already set.
