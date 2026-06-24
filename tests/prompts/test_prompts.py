@@ -6,8 +6,8 @@ from src.utils.prompt_loader import load_prompt
 
 def test_prompt_loader_loads_default():
     """Validates that passing theme='default' successfully loads a template."""
-    # This assumes 'editor.md' exists in src/prompts/default/
-    content, headings = load_prompt("editor.md", theme="default", sub_title="test", draft="test", critique="test", content_context="test", feedback="test", learning_context_block="test")
+    # This assumes 'content_generator.md' exists in src/prompts/default/
+    content, headings = load_prompt("content_generator.md", theme="default", sub_title="test", course_name="test", course_topic="test", duration_weeks="test", module_title="test", submodule_title="test", content_context="test", module_context="test", running_summary="test", learned_rules="test", source_context="test", learning_context_block="test", lesson_contract="test", quality_profile="test", learner_level="test", code_example_style="test", explanation_depth="test", module_position="test", learner_level_rules="test")
     assert content is not None
     assert isinstance(content, str)
     assert len(content) > 0

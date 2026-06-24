@@ -1,0 +1,53 @@
+{
+  "lesson_contract_name": "guided_weekly",
+  "sections": [
+    {
+      "title": "Learning Target",
+      "aliases": ["Target", "Goal"],
+      "min_words": 15,
+      "required": true
+    },
+    {
+      "title": "Where This Fits",
+      "aliases": ["Context", "Placement"],
+      "min_words": 30,
+      "required": true
+    },
+    {
+      "title": "Core Idea",
+      "aliases": ["Core Concept"],
+      "min_words": 60,
+      "required": true
+    },
+    {
+      "title": "Guided Explanation",
+      "aliases": ["Explanation", "Walkthrough"],
+      "min_words": 80,
+      "required": true
+    },
+    {
+      "title": "Worked Example",
+      "aliases": ["Example", "Demo"],
+      "min_words": 60,
+      "required": true
+    },
+    {
+      "title": "Practice Task",
+      "aliases": ["Practice", "Task"],
+      "min_words": 25,
+      "required": true
+    },
+    {
+      "title": "Checkpoint",
+      "aliases": ["Review", "Self-Check"],
+      "min_words": 15,
+      "required": true
+    },
+    {
+      "title": "Summary and Bridge",
+      "aliases": ["Summary", "Conclusion", "Next Steps"],
+      "min_words": 35,
+      "required": true
+    }
+  ]
+}

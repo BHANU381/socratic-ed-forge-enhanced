@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist
 from src.utils.logger import log_event, update_status, update_telemetry
-from src.utils.learning_engine import record_lesson
+# from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
 from src.utils.cleanup_utils import final_markdown_cleanup
 from src.models.schemas import CourseInput, TelemetryData, RunManifest, LessonContract, SectionRequirement, QualityProfile, Submodule
@@ -615,8 +615,8 @@ class Orchestrator:
         
         # Write Table of Contents if starting new
         if self.run_type != "resume_existing_run":
-            from src.utils.learning_engine import clear_style_guide
-            clear_style_guide()
+            # from src.utils.learning_engine import clear_style_guide
+            # clear_style_guide()
             with open(self.master_file, 'w', encoding='utf-8') as f:
                 f.write(f"# {self.course.course_name}\n\n")
                 f.write(f"**Topic:** {self.course.topic}\n\n")
@@ -707,6 +707,8 @@ class Orchestrator:
                     norm_sub_title = normalize_submodule_heading(sub.title)
                     f.write(f"\n## Submodule: {norm_sub_title}\n\n{draft}\n\n")
                     
+                update_live_preview(self.session_dir, self.master_file)
+                    
                 # Mark as completed in manifest
                 manifest.completed_submodules.append(sub.title)
                 manifest.per_agent_tokens = self.telemetry["per_agent_tokens"]
@@ -753,7 +755,8 @@ class Orchestrator:
             if repeated_blockers:
                 log_event("LearningEngine", f"Repeated blocker patterns detected: {repeated_blockers}. Recording lesson.")
                 for pattern in repeated_blockers:
-                    record_lesson(mod.title, "Repeated_Pattern", pattern, "")
+                    # record_lesson(mod.title, "Repeated_Pattern", pattern, "")
+                    pass
                     
             # Reset local submodule failure tracking for the next module
             self.telemetry["failure_reasons"] = []
@@ -762,6 +765,8 @@ class Orchestrator:
         if self.master_file.exists():
             final_content = final_markdown_cleanup(self.master_file.read_text(encoding="utf-8"))
             self.master_file.write_text(final_content, encoding="utf-8")
+            
+        update_live_preview(self.session_dir, self.master_file)
 
         # Export Guard Checks
         master_content = self.master_file.read_text(encoding="utf-8") if self.master_file.exists() else ""
