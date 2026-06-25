@@ -185,6 +185,34 @@ class Orchestrator:
             with open(contract_path, "r", encoding="utf-8") as f:
                 contract_data = json.load(f)
                 self.lesson_contract = LessonContract(**contract_data)
+                
+        # Calculate dynamic word limits if prompt theme is ottolearn
+        self.core_idea_words = 100
+        self.implementation_words = 150
+        self.why_it_matters_words = 50
+        if course.prompt_theme == "ottolearn":
+            total_submodules = sum(len(mod.submodules) for mod in course.modules) if course.modules else 0
+            if total_submodules > 0:
+                # 8 hours of study time per week -> target words per submodule:
+                target_words = int(((course.duration_weeks * 8) / total_submodules) * 2400)
+                target_words = max(400, min(4000, target_words))
+                
+                # Distribute words: Hook (15 words)
+                remaining = target_words - 15
+                self.core_idea_words = max(100, int(remaining * 0.40))
+                self.implementation_words = max(150, int(remaining * 0.45))
+                self.why_it_matters_words = max(50, int(remaining * 0.15))
+                
+                # Dynamically update the lesson contract section requirements
+                for sec in self.lesson_contract.sections:
+                    if sec.title == "Hook":
+                        sec.min_words = 15
+                    elif sec.title == "Core Idea":
+                        sec.min_words = self.core_idea_words
+                    elif sec.title == "Implementation":
+                        sec.min_words = self.implementation_words
+                    elif sec.title == "Why it Matters":
+                        sec.min_words = self.why_it_matters_words
         
         # Initialize structured telemetry
         self.telemetry = {
@@ -349,7 +377,10 @@ class Orchestrator:
             learner_level=getattr(self.course, "learner_level", "beginner"),
             code_example_style=getattr(self.course, "code_example_style", "progressive_production"),
             explanation_depth=getattr(self.course, "explanation_depth", "balanced"),
-            module_position=module_position
+            module_position=module_position,
+            core_idea_words=getattr(self, "core_idea_words", 100),
+            implementation_words=getattr(self, "implementation_words", 150),
+            why_it_matters_words=getattr(self, "why_it_matters_words", 50)
         )
         self.update_agent_tokens("content_generator", self.generator)
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))

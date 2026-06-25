@@ -83,8 +83,16 @@ def run_verification(theme: str):
         
     try:
         # Load existing inputs
-        with open(backup_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        if backup_path.exists():
+            with open(backup_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = {
+                "course_name": "Test Course",
+                "topic": "Python Programming",
+                "duration_weeks": 4,
+                "modules": []
+            }
             
         # Update theme
         data["prompt_theme"] = theme

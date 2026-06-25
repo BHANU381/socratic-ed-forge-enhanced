@@ -52,4 +52,5 @@ Thumbs.db
 .vscode/
 .idea/
 wiki/
-.agent/
+.agents/
+.skills/

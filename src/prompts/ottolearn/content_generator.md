@@ -41,21 +41,21 @@ The following concepts have already been covered in prior chapters. Do not repea
 
 Every submodule MUST STRICTLY follow this structure using specific Markdown headings.
 
-### Hook: [Engaging 1-sentence hook here]
+### Hook: [Subtle, short 1-sentence hook]
 - **Heading**: `### Hook: [Your hook text]` MUST be the ONLY `###` heading in the submodule.
-- **Content**: A short, engaging 1-2 sentence hook that explains why the learner should care.
+- **Content**: A short, subtle, and direct 1-sentence hook (under 25 words) that briefly positions the value of the concept. Keep it professional, objective, and academic. Do NOT make it overly dramatic, clickbaity, or attention-grabbing.
 
 #### Core Idea
 - **Heading**: `#### Core Idea` (Level 4 heading)
-- **Content**: Explain the theoretical concept clearly and concisely.
+- **Content**: Explain the theoretical concept clearly and in detail. (Target length: at least {core_idea_words} words).
 
 #### Implementation
 - **Heading**: `#### Implementation` (Level 4 heading)
-- **Content**: Provide a practical code example, scenario, or walkthrough demonstrating the concept.
+- **Content**: Provide a practical code example, scenario, or walkthrough demonstrating the concept. (Target length: at least {implementation_words} words).
 
 #### Why it Matters
 - **Heading**: `#### Why it Matters` (Level 4 heading)
-- **Content**: A brief summary of why this concept is important and when to use it in the real world.
+- **Content**: A brief summary of why this concept is important and when to use it in the real world. (Target length: at least {why_it_matters_words} words).
 
 ### Structural Rules
 1. **Level 3 Heading**: You MUST output exactly ONE level-3 heading (`### Hook: ...`). Do not use any other `###` headings in the submodule.
