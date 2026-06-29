@@ -37,6 +37,7 @@ venv.bak/
 
 # Data and Outputs (NEVER commit these)
 data/output/
+tests/output/
 data/logs.txt
 data/status.txt
 data/input/*.json

@@ -115,9 +115,16 @@ def run_verification(theme: str):
             json.dump(data, f, indent=4)
             
         # Run main loop
+        test_output_dir = PROJECT_ROOT / 'tests' / 'output'
+        test_output_dir.mkdir(parents=True, exist_ok=True)
+        
         mock_client = setup_mock_client()
         with patch('google.genai.Client', return_value=mock_client), \
-             patch.dict(os.environ, {"GEMINI_API_KEY": "test_api_key", "RUN_EVALS": "true"}):
+             patch.dict(os.environ, {
+                 "GEMINI_API_KEY": "test_api_key",
+                 "RUN_EVALS": "true",
+                 "OUTPUT_DIR": str(test_output_dir)
+             }):
             from src.engine.orchestrator import main
             main()
             print(f"Theme {theme} executed successfully without crashes.")

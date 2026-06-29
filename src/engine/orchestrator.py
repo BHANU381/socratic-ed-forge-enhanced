@@ -15,7 +15,7 @@ from src.utils.logger import log_event, update_status, update_telemetry
 # from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
 from src.utils.cleanup_utils import final_markdown_cleanup
-from src.models.schemas import CourseInput, TelemetryData, RunManifest, LessonContract, SectionRequirement, QualityProfile, Submodule
+from src.models.schemas import CourseStructure, ModuleStructure, Topic, TelemetryData, RunManifest, LessonContract, SectionRequirement, QualityProfile, normalize_course_input
 
 # Load environment variables
 load_dotenv()
@@ -156,31 +156,45 @@ def update_live_preview(session_dir: Optional[Path], master_file: Path, sub_titl
         print(f"Error updating live preview: {e}")
 
 class Orchestrator:
-    def __init__(self, course: CourseInput, session_dir: Path, run_type: str = "new_run"):
-        self.course = course
+    def __init__(self, course: Any, session_dir: Path, run_type: str = "new_run"):
+        if course.__class__.__name__ == "CourseStructure":
+            self.course = course
+        elif isinstance(course, dict):
+            self.course = normalize_course_input(course)
+        else:
+            try:
+                if hasattr(course, "model_dump"):
+                    self.course = normalize_course_input(course.model_dump())
+                elif hasattr(course, "dict"):
+                    self.course = normalize_course_input(course.dict())
+                else:
+                    self.course = course
+            except Exception:
+                self.course = course
+
         self.session_dir = session_dir
         self.run_type = run_type
         
         # File path setups
-        safe_course_name = "".join([c if c.isalnum() else "_" for c in self.course.course_name])
+        safe_course_name = "".join([c if c.isalnum() else "_" for c in self.course.course_title])
         self.master_file = self.session_dir / f"{safe_course_name}.md"
         
         # Initialize modern agents
-        self.generator = ContentGenerator("Content Generator", theme=course.prompt_theme)
-        self.semantic_evaluator = SemanticEvaluator("Semantic Evaluator", theme=course.prompt_theme)
-        self.patch_editor = PatchEditor("Patch Editor", theme=course.prompt_theme)
-        self.archivist = Archivist("Archivist", theme=course.prompt_theme)
+        self.generator = ContentGenerator("Content Generator", theme=self.course.prompt_theme)
+        self.semantic_evaluator = SemanticEvaluator("Semantic Evaluator", theme=self.course.prompt_theme)
+        self.patch_editor = PatchEditor("Patch Editor", theme=self.course.prompt_theme)
+        self.archivist = Archivist("Archivist", theme=self.course.prompt_theme)
         
         # Define lesson contract and quality profile with dynamic defaults
-        self.quality_profile = course.quality_profile or QualityProfile.STANDARD
+        self.quality_profile = self.course.quality_profile or QualityProfile.STANDARD
         
-        contract_path = Path("src/prompts") / course.prompt_theme / "contract.json"
+        contract_path = Path("src/prompts") / self.course.prompt_theme / "contract.json"
         
-        if course.lesson_contract:
-            self.lesson_contract = course.lesson_contract
+        if self.course.lesson_contract:
+            self.lesson_contract = self.course.lesson_contract
         else:
             if not contract_path.exists():
-                raise FileNotFoundError(f"contract.json not found in theme '{course.prompt_theme}'.")
+                raise FileNotFoundError(f"contract.json not found in theme '{self.course.prompt_theme}'.")
             
             with open(contract_path, "r", encoding="utf-8") as f:
                 contract_data = json.load(f)
@@ -223,9 +237,9 @@ class Orchestrator:
             "output_tokens": 0,
             "total_tokens": 0,
             "model_name": self.generator.model_id,
-            "learner_level": getattr(course, "learner_level", "beginner"),
-            "code_example_style": getattr(course, "code_example_style", "progressive_production"),
-            "explanation_depth": getattr(course, "explanation_depth", "balanced"),
+            "learner_level": getattr(self.course, "learner_level", "beginner"),
+            "code_example_style": getattr(self.course, "code_example_style", "progressive_production"),
+            "explanation_depth": getattr(self.course, "explanation_depth", "balanced"),
             "quality_profile": self.quality_profile.value,
             "module_position": "",
             "level_alignment_status": "none",
@@ -253,13 +267,13 @@ class Orchestrator:
             with open(manifest_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             # Detect configuration mismatches
-            if data.get("topic") != self.course.topic or data.get("quality_profile") != self.quality_profile.value:
-                raise ValueError(f"Configuration mismatch: Manifest topic '{data.get('topic')}' or quality_profile '{data.get('quality_profile')}' does not match current topic '{self.course.topic}' or quality_profile '{self.quality_profile.value}'.")
+            if data.get("topic") != self.course.course_context or data.get("quality_profile") != self.quality_profile.value:
+                raise ValueError(f"Configuration mismatch: Manifest topic '{data.get('topic')}' or quality_profile '{data.get('quality_profile')}' does not match current topic '{self.course.course_context}' or quality_profile '{self.quality_profile.value}'.")
             return RunManifest.model_validate(data)
         else:
             manifest = RunManifest(
-                course_id=self.course.course_name,
-                topic=self.course.topic,
+                course_id=self.course.course_title,
+                topic=self.course.course_context,
                 lesson_contract=self.lesson_contract,
                 quality_profile=self.quality_profile.value,
                 completed_submodules=[]
@@ -278,7 +292,7 @@ class Orchestrator:
 
         # Count expected modules and submodules
         expected_module_count = len(self.course.modules)
-        expected_submodule_count = sum(len(m.submodules) for m in self.course.modules)
+        expected_submodule_count = sum(len(m.topics) for m in self.course.modules)
         
         # Check generated module and submodule headings in markdown
         gen_modules = re.findall(r'^# Module \d+:\s*(.*)$', master_content, re.MULTILINE)
@@ -291,14 +305,14 @@ class Orchestrator:
             return f"Submodule count mismatch: expected {expected_submodule_count}, got {len(gen_submodules)}"
             
         # Verify final Markdown contains all expected module titles
-        expected_modules_cleaned = {clean_title(mod.title) for mod in self.course.modules}
+        expected_modules_cleaned = {clean_title(mod.module_title) for mod in self.course.modules}
         gen_modules_cleaned = {clean_title(m) for m in gen_modules}
         for mod in self.course.modules:
-            if clean_title(mod.title) not in gen_modules_cleaned:
-                return f"Expected module title '{mod.title}' is missing from the generated book."
+            if clean_title(mod.module_title) not in gen_modules_cleaned:
+                return f"Expected module title '{mod.module_title}' is missing from the generated book."
                 
         # Verify final Markdown contains all expected submodule titles
-        expected_submodules_lower = [sub.title.strip().lower() for mod in self.course.modules for sub in mod.submodules]
+        expected_submodules_lower = [sub.topic_title.strip().lower() for mod in self.course.modules for sub in mod.topics]
         for sub_title in expected_submodules_lower:
             if sub_title not in [s.strip().lower() for s in gen_submodules]:
                 return f"Expected submodule title '{sub_title}' is missing from the generated book."
@@ -327,20 +341,62 @@ class Orchestrator:
                 
         # No extra module appears before the first expected module
         for idx, m in enumerate(gen_modules):
-            if clean_title(m) != clean_title(self.course.modules[idx].title):
-                return f"Module order mismatch at index {idx+1}: expected '{self.course.modules[idx].title}', got '{m}'"
+            if clean_title(m) != clean_title(self.course.modules[idx].module_title):
+                return f"Module order mismatch at index {idx+1}: expected '{self.course.modules[idx].module_title}', got '{m}'"
                 
         # Flattened expected submodules list
-        all_expected_subs = [sub.title.strip().lower() for mod in self.course.modules for sub in mod.submodules]
+        all_expected_subs = [sub.topic_title.strip().lower() for mod in self.course.modules for sub in mod.topics]
         for idx, s in enumerate(gen_submodules):
             if s.strip().lower() != all_expected_subs[idx]:
                 return f"Submodule order mismatch at index {idx+1}: expected '{all_expected_subs[idx]}', got '{s}'"
                 
         return None
 
-    def run_submodule_pipeline(self, submodule: Submodule, module_title: str, module_context: str, running_summary: str = "", module_position: str = "") -> Tuple[str, str]:
-        sub_title = submodule.title
-        content_context = submodule.content_context
+    def run_submodule_pipeline(self, submodule: Any, module_title: str, module_context: str, running_summary: str = "", module_position: str = "") -> Tuple[str, str]:
+        sub_title = ""
+        t_title = getattr(submodule, "topic_title", None)
+        if isinstance(t_title, str):
+            sub_title = t_title
+        else:
+            t_title = getattr(submodule, "title", None)
+            if isinstance(t_title, str):
+                sub_title = t_title
+            elif t_title is not None:
+                sub_title = str(t_title)
+
+        content_context = ""
+        t_context = getattr(submodule, "concept", None)
+        if isinstance(t_context, str):
+            content_context = t_context
+        else:
+            t_context = getattr(submodule, "content_context", None)
+            if isinstance(t_context, str):
+                content_context = t_context
+            elif t_context is not None:
+                content_context = str(t_context)
+        
+        # Extract rich add-on fields
+        breakdown = getattr(submodule, "breakdown", "")
+        constraints = getattr(submodule, "constraints", "")
+        edge_cases = getattr(submodule, "edge_cases", "")
+        action_items = getattr(submodule, "action_items", [])
+        common_mistakes = getattr(submodule, "common_mistakes", [])
+        evaluation_path = getattr(submodule, "evaluation_path", "")
+        expert_heuristic = getattr(submodule, "expert_heuristic", "")
+        
+        # Convert lists to markdown bullets
+        action_items_str = "\n".join(f"- {item}" for item in action_items) if isinstance(action_items, list) else str(action_items)
+        common_mistakes_str = "\n".join(f"- {mistake}" for mistake in common_mistakes) if isinstance(common_mistakes, list) else str(common_mistakes)
+
+        addon_kwargs = {
+            "breakdown": breakdown,
+            "topic_constraints": constraints,
+            "edge_cases": edge_cases,
+            "action_items": action_items_str,
+            "common_mistakes": common_mistakes_str,
+            "evaluation_path": evaluation_path,
+            "expert_heuristic": expert_heuristic
+        }
         
         # Reset per-agent local token counts
         self.generator.input_tokens = 0
@@ -380,7 +436,8 @@ class Orchestrator:
             module_position=module_position,
             core_idea_words=getattr(self, "core_idea_words", 100),
             implementation_words=getattr(self, "implementation_words", 150),
-            why_it_matters_words=getattr(self, "why_it_matters_words", 50)
+            why_it_matters_words=getattr(self, "why_it_matters_words", 50),
+            **addon_kwargs
         )
         self.update_agent_tokens("content_generator", self.generator)
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
@@ -436,7 +493,7 @@ class Orchestrator:
                     draft=draft,
                     feedback=blocker.message,
                     heading=heading_to_patch,
-                    course_topic=self.course.topic,
+                    course_topic=self.course.course_context,
                     submodule_title=sub_title,
                     patch_mode="fix_structure",
                     learner_level=getattr(self.course, "learner_level", "beginner")
@@ -508,13 +565,14 @@ class Orchestrator:
             eval_res = self.semantic_evaluator.evaluate(
                 draft=draft,
                 lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
-                course_topic=self.course.topic,
+                course_topic=self.course.course_context,
                 submodule_title=sub_title,
                 running_summary=running_summary,
                 learner_level=getattr(self.course, "learner_level", "beginner"),
                 code_example_style=getattr(self.course, "code_example_style", "progressive_production"),
                 explanation_depth=getattr(self.course, "explanation_depth", "balanced"),
-                module_position=module_position
+                module_position=module_position,
+                **addon_kwargs
             )
             self.update_agent_tokens("semantic_evaluator", self.semantic_evaluator)
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
@@ -555,10 +613,11 @@ class Orchestrator:
                     draft=draft,
                     feedback=blocker.message,
                     heading=heading_to_patch,
-                    course_topic=self.course.topic,
+                    course_topic=self.course.course_context,
                     submodule_title=sub_title,
                     patch_mode=p_mode,
-                    learner_level=getattr(self.course, "learner_level", "beginner")
+                    learner_level=getattr(self.course, "learner_level", "beginner"),
+                    **addon_kwargs
                 )
                 self.telemetry["patch_mode"] = p_mode
                 
@@ -596,13 +655,14 @@ class Orchestrator:
             final_eval = self.semantic_evaluator.evaluate(
                 draft=draft,
                 lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
-                course_topic=self.course.topic,
+                course_topic=self.course.course_context,
                 submodule_title=sub_title,
                 running_summary=running_summary,
                 learner_level=getattr(self.course, "learner_level", "beginner"),
                 code_example_style=getattr(self.course, "code_example_style", "progressive_production"),
                 explanation_depth=getattr(self.course, "explanation_depth", "balanced"),
-                module_position=module_position
+                module_position=module_position,
+                **addon_kwargs
             )
             self.update_agent_tokens("semantic_evaluator", self.semantic_evaluator)
             
@@ -649,14 +709,14 @@ class Orchestrator:
             # from src.utils.learning_engine import clear_style_guide
             # clear_style_guide()
             with open(self.master_file, 'w', encoding='utf-8') as f:
-                f.write(f"# {self.course.course_name}\n\n")
-                f.write(f"**Topic:** {self.course.topic}\n\n")
+                f.write(f"# {self.course.course_title}\n\n")
+                f.write(f"**Topic:** {self.course.course_context}\n\n")
                 f.write("# Table of Contents\n\n")
                 for m_idx, mod in enumerate(self.course.modules):
-                    m_title = normalize_module_heading(mod.title)
+                    m_title = normalize_module_heading(mod.module_title)
                     f.write(f"{m_idx+1}. {m_title}\n")
-                    for sub in mod.submodules:
-                        sub_title = normalize_submodule_heading(sub.title)
+                    for sub in mod.topics:
+                        sub_title = normalize_submodule_heading(sub.topic_title)
                         f.write(f"   - {sub_title}\n")
                 f.write("\n---\n\n")
         
@@ -664,16 +724,16 @@ class Orchestrator:
         self.telemetry["status"] = "Running"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
         
-        total_submodules = sum(len(mod.submodules) for mod in self.course.modules)
+        total_submodules = sum(len(mod.topics) for mod in self.course.modules)
         running_summary = ""
         
         total_modules = len(self.course.modules)
         for m_idx, mod in enumerate(self.course.modules):
             _check_stop(self.telemetry, self.session_dir)
-            total_submodules_in_mod = len(mod.submodules)
+            total_submodules_in_mod = len(mod.topics)
             
             # Module header
-            norm_mod_title = normalize_module_heading(mod.title)
+            norm_mod_title = normalize_module_heading(mod.module_title)
             module_header = f"\n# Module {m_idx+1}: {norm_mod_title}\n\n"
             # Read master file and check if module title is already written
             master_content = self.master_file.read_text(encoding="utf-8")
@@ -681,27 +741,27 @@ class Orchestrator:
                 with open(self.master_file, 'a', encoding='utf-8') as f:
                     f.write(module_header)
                     
-            self.telemetry["current_module"] = mod.title
+            self.telemetry["current_module"] = mod.module_title
             
             # Collect blocker issue types inside this module to detect repeated patterns
             module_blocker_types = []
             
-            for s_idx, sub in enumerate(mod.submodules):
+            for s_idx, sub in enumerate(mod.topics):
                 _check_stop(self.telemetry, self.session_dir)
                 
                 # Check if submodule is already completed in manifest (allowing safe resumes)
-                if sub.title in manifest.completed_submodules:
-                    log_event("System", f"Submodule '{sub.title}' already completed. Skipping.")
+                if sub.topic_title in manifest.completed_submodules:
+                    log_event("System", f"Submodule '{sub.topic_title}' already completed. Skipping.")
                     continue
                     
-                update_status(f"Preparing {sub.title}...", session_dir=str(session_dir))
+                update_status(f"Preparing {sub.topic_title}...", session_dir=str(session_dir))
                 time.sleep(1)
                 
-                update_status(f"Generator Agent: Drafting '{sub.title}'", session_dir=str(session_dir))
-                log_event("Generator", f"Drafting submodule: {sub.title}", session_dir=str(session_dir))
+                update_status(f"Generator Agent: Drafting '{sub.topic_title}'", session_dir=str(session_dir))
+                log_event("Generator", f"Drafting submodule: {sub.topic_title}", session_dir=str(session_dir))
                 
                 self.telemetry["current_agent"] = "Generator"
-                self.telemetry["current_submodule"] = sub.title
+                self.telemetry["current_submodule"] = sub.topic_title
                 update_telemetry(self.telemetry, session_dir=str(session_dir))
                 
                 # Truncate summary if needed
@@ -710,7 +770,7 @@ class Orchestrator:
                 module_position = f"Module {m_idx+1}/{total_modules}, Submodule {s_idx+1}/{total_submodules_in_mod}"
                 self.telemetry["module_position"] = module_position
                 
-                status, draft = self.run_submodule_pipeline(sub, mod.title, mod.module_context, running_summary, module_position)
+                status, draft = self.run_submodule_pipeline(sub, mod.module_title, mod.module_context, running_summary, module_position)
                 
                 # Check status
                 if status == "failed_blocker":
@@ -725,7 +785,7 @@ class Orchestrator:
                     }
                     
                     import json
-                    log_event("Orchestrator", f"Submodule '{sub.title}' failed with blocker. Final blocker payload:\n{json.dumps(final_failure_payload, indent=2)}")
+                    log_event("Orchestrator", f"Submodule '{sub.topic_title}' failed with blocker. Final blocker payload:\n{json.dumps(final_failure_payload, indent=2)}")
                     self.telemetry["failed_max_iterations"] += 1
                 else:
                     if status == "approved":
@@ -735,13 +795,13 @@ class Orchestrator:
                         
                 # Append submodule content to master file anyway (preserving usability)
                 with open(self.master_file, 'a', encoding='utf-8') as f:
-                    norm_sub_title = normalize_submodule_heading(sub.title)
+                    norm_sub_title = normalize_submodule_heading(sub.topic_title)
                     f.write(f"\n## Submodule: {norm_sub_title}\n\n{draft}\n\n")
                     
                 update_live_preview(self.session_dir, self.master_file)
                     
                 # Mark as completed in manifest
-                manifest.completed_submodules.append(sub.title)
+                manifest.completed_submodules.append(sub.topic_title)
                 manifest.per_agent_tokens = self.telemetry["per_agent_tokens"]
                 manifest.total_tokens = self.telemetry["total_tokens"]
                 self.save_manifest(manifest)
@@ -751,7 +811,7 @@ class Orchestrator:
                 update_telemetry(self.telemetry, session_dir=str(session_dir))
                 
                 # Run Archivist for this submodule
-                log_event("Archivist", f"Summarizing {sub.title}...", session_dir=str(session_dir))
+                log_event("Archivist", f"Summarizing {sub.topic_title}...", session_dir=str(session_dir))
                 self.telemetry["current_agent"] = "Archivist"
                 update_telemetry(self.telemetry, session_dir=str(session_dir))
                 try:
@@ -760,17 +820,17 @@ class Orchestrator:
                     summary_text = self.archivist.compress_submodule(
                         content=draft,
                         course_info=self.course,
-                        module_title=mod.title,
-                        sub_title=sub.title,
+                        module_title=mod.module_title,
+                        sub_title=sub.topic_title,
                         running_summary=running_summary
                     )
-                    running_summary += f"\n- {sub.title}: {summary_text.strip()}"
+                    running_summary += f"\n- {sub.topic_title}: {summary_text.strip()}"
                     self.update_agent_tokens("archivist", self.archivist)
                     log_event("Archivist", f"Processed: Submodule compressed successfully. Summary preview: {summary_text[:100]}...")
                 except Exception as e:
                     log_event("Archivist", f"Failed: compression error: {str(e)}")
                 self.telemetry["current_agent"] = "None"
-                update_telemetry(self.telemetry, session_dir=str(session_dir))
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                     
                 # Store any blockers that occurred in this submodule run
                 for reason in self.telemetry["failure_reasons"]:
@@ -786,7 +846,7 @@ class Orchestrator:
             if repeated_blockers:
                 log_event("LearningEngine", f"Repeated blocker patterns detected: {repeated_blockers}. Recording lesson.")
                 for pattern in repeated_blockers:
-                    # record_lesson(mod.title, "Repeated_Pattern", pattern, "")
+                    # record_lesson(mod.module_title, "Repeated_Pattern", pattern, "")
                     pass
                     
             # Reset local submodule failure tracking for the next module
@@ -827,7 +887,11 @@ def main() -> None:
         return
 
     input_path = PROJECT_ROOT / 'data' / 'input' / 'course_input.json'
-    output_dir = PROJECT_ROOT / 'data' / 'output'
+    output_dir_env = os.environ.get("OUTPUT_DIR")
+    if output_dir_env:
+        output_dir = Path(output_dir_env)
+    else:
+        output_dir = PROJECT_ROOT / 'data' / 'output'
     
     if not input_path.exists():
         print(f"ERROR: Input file not found at {input_path}")
@@ -840,8 +904,8 @@ def main() -> None:
         return
 
     try:
-        course = CourseInput.model_validate(data)
-    except ValidationError as e:
+        course = normalize_course_input(data)
+    except (ValidationError, ValueError) as e:
         print(f"CRITICAL ERROR: Course Input Schema Validation Failed:\n{e}")
         return
 
@@ -857,8 +921,8 @@ def main() -> None:
                 try:
                     with open(manifest_file, "r", encoding="utf-8") as f:
                         m_data = json.load(f)
-                    total_sub = sum(len(m.submodules) for m in course.modules)
-                    if m_data.get("topic") == course.topic and len(m_data.get("completed_submodules", [])) < total_sub:
+                    total_sub = sum(len(m.topics) for m in course.modules)
+                    if m_data.get("topic") == course.course_context and len(m_data.get("completed_submodules", [])) < total_sub:
                         latest_session_dir = s_dir
                         print(f"Found incomplete session to resume: {latest_session_dir}")
                         break
@@ -876,13 +940,23 @@ def main() -> None:
     orchestrator = Orchestrator(course, session_dir, run_type=run_type)
     orchestrator.run_course_pipeline()
 
-def check_manifest_and_leakage(master_content: str, course: CourseInput) -> Optional[str]:
+def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str]:
     def clean_title(t: str) -> str:
         return re.sub(r'(?i)^module\s+\d+:\s*', '', t).strip().lower()
 
-    # Extract expected module and submodule titles
-    expected_modules = {clean_title(mod.title) for mod in course.modules}
-    expected_submodules = {sub.title.strip().lower() for mod in course.modules for sub in mod.submodules}
+    # Extract expected module and submodule titles supporting both formats
+    expected_modules = set()
+    expected_submodules = set()
+    
+    modules = getattr(course, "modules", [])
+    for mod in modules:
+        m_title = getattr(mod, "module_title", getattr(mod, "title", ""))
+        expected_modules.add(clean_title(m_title))
+        
+        topics = getattr(mod, "topics", getattr(mod, "submodules", []))
+        for sub in topics:
+            sub_title = getattr(sub, "topic_title", getattr(sub, "title", ""))
+            expected_submodules.add(sub_title.strip().lower())
     
     # Check for known mock/test placeholders case-insensitively
     placeholders = [

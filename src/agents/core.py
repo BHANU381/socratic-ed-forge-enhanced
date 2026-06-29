@@ -74,8 +74,8 @@ def _extract_course_metadata(course_info=None, **kwargs) -> dict:
                     pass
         return ""
 
-    metadata["course_name"] = str(get_val(["course_name", "name"], ["course_name", "name"]))
-    metadata["course_topic"] = str(get_val(["course_topic", "topic"], ["course_topic", "topic"]))
+    metadata["course_name"] = str(get_val(["course_title", "course_name", "name"], ["course_title", "course_name", "name"]))
+    metadata["course_topic"] = str(get_val(["course_context", "course_topic", "topic"], ["course_context", "course_topic", "topic"]))
     metadata["duration_weeks"] = str(get_val(["duration_weeks"], ["duration_weeks"]))
     metadata["module_context"] = str(get_val(["module_context"], ["module_context"]))
     metadata["source_context"] = str(get_val(["source_context"], ["source_context"]))

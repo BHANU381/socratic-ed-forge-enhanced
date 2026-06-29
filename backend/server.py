@@ -233,9 +233,9 @@ async def start_pipeline(
         if quality_profile is not None:
             data["quality_profile"] = quality_profile
             
-        # Validate schema using Pydantic
-        from src.models.schemas import CourseInput
-        CourseInput.model_validate(data)
+        # Validate schema and normalize it to ensure the structure is correct
+        from src.models.schemas import normalize_course_input
+        normalize_course_input(data)
         
         # Rewrite the modified data to file_bytes to be saved
         file_bytes = json.dumps(data, indent=4).encode('utf-8')
@@ -243,8 +243,8 @@ async def start_pipeline(
         raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
     except Exception as e:
         from pydantic import ValidationError
-        if isinstance(e, ValidationError):
-            raise HTTPException(status_code=422, detail=f"Schema Validation Failed: {e.errors()}")
+        if isinstance(e, (ValidationError, ValueError)):
+            raise HTTPException(status_code=422, detail=f"Schema Validation Failed: {e}")
         raise HTTPException(status_code=400, detail=f"Validation error: {e}")
 
     config_path = INPUT_DIR / "course_input.json"
