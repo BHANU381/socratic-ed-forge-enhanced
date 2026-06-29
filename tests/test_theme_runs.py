@@ -29,3 +29,7 @@ def test_theme_general():
 def test_theme_ottolearn():
     """Verify that ottolearn theme runs the orchestrator loop without crashes."""
     run_verification("ottolearn")
+
+def test_theme_otto2():
+    """Verify that otto2 theme runs the orchestrator loop without crashes."""
+    run_verification("otto2")

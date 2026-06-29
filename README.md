@@ -96,5 +96,77 @@ socratic-ed-forge/
 └── requirements.txt    # Python dependencies
 ```
 
+## 🧪 Running a Sample Generation
+
+To start producing content, the engine requires a structured JSON configuration file that defines the course outline. You can upload this JSON via the **Settings/Controls** panel in the React Dashboard.
+
+Here is a comprehensive sample `course_input.json` using the modern `CourseStructure` schema. It showcases both the **required (must-have)** fields and the powerful **optional** features available for fine-tuning generation:
+
+```json
+{
+  "course_title": "Introduction to AI Engineering",
+  "course_context": "A comprehensive guide on building agentic workflows and deterministic AI pipelines.",
+  "duration_weeks": 4,
+  "prompt_theme": "default",
+  "quality_profile": "textbook",
+  "learner_level": "intermediate",
+  "code_example_style": "progressive_production",
+  "explanation_depth": "deep",
+  "student_personas": [
+    {
+      "name": "Alex",
+      "context": "A software engineer transitioning into AI, familiar with Python but new to LLMs."
+    }
+  ],
+  "modules": [
+    {
+      "module_title": "Module 1: Agentic Patterns",
+      "module_context": "Understanding how to build reliable AI agents beyond simple chat bots.",
+      "learning_outcomes": [
+        "Design robust AI workflows",
+        "Implement deterministic validation"
+      ],
+      "module_constraints": [
+        "Focus on practical engineering rather than theory"
+      ],
+      "topics": [
+        {
+          "topic_title": "Topic 1: The Evaluator-Optimizer Loop",
+          "concept": "Using an evaluator agent to critique and patch outputs deterministically.",
+          "breakdown": "1. Draft Generation 2. Critique 3. Patch Editing",
+          "constraints": "Do not mention outdated models like GPT-2.",
+          "edge_cases": "Handling infinite loops when patches fail validation.",
+          "action_items": [
+            "Implement a basic patch editor"
+          ],
+          "common_mistakes": [
+            "Relying on LLMs to rewrite the entire document instead of surgical patches"
+          ],
+          "expert_heuristic": "A deterministic pipeline is only as good as its strict parsing rules.",
+          "expert_story": "When we first built this at Scale, we noticed LLMs kept drifting...",
+          "reference_guides": ["https://platform.openai.com/docs/guides/prompt-engineering"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Required vs Optional Fields
+
+**Required Fields:**
+- `course_title` and `course_context`
+- `modules`: List of modules.
+  - `module_title` and `module_context`
+  - `topics`: List of topics in the module.
+    - `topic_title` and `concept`
+
+**Optional Power Features:**
+- **Course Level:** `duration_weeks`, `student_personas`, `lesson_contract`, and stylistic flags (`prompt_theme`, `quality_profile`, `learner_level`, `code_example_style`, `explanation_depth`). Note: These can also be overridden via the UI Dashboard.
+- **Module Level:** `learning_outcomes`, `module_constraints`.
+- **Topic Level:** `breakdown`, `constraints`, `edge_cases`, `action_items`, `common_mistakes`, `evaluation_path`, `expert_heuristic`, `expert_story`, and `reference_guides`.
+
+Once uploaded, select your **RPM/TPM limits**, choose your **Learner Level** and **Code Style**, and hit **Start Production**.
+
 ---
 *Developed with the Socratic Ed-Forge Engine.*

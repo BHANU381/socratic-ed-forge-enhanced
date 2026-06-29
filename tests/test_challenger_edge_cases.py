@@ -98,9 +98,8 @@ def test_orchestrator_handles_validation_failure_gracefully(mock_print, tmp_path
     data_dir = tmp_path / 'data' / 'input'
     data_dir.mkdir(parents=True)
     input_file = data_dir / 'course_input.json'
-    # invalid schema (missing duration_weeks)
+    # invalid schema (missing course_name)
     input_file.write_text(json.dumps({
-        "course_name": "Test",
         "topic": "Testing",
         "modules": []
     }))

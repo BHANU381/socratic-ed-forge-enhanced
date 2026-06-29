@@ -151,3 +151,104 @@ class RunManifest(BaseModel):
     total_tokens: Optional[int] = 0
     per_agent_tokens: Optional[Dict[str, int]] = None
     completed_submodules: List[str] = Field(default_factory=list)
+
+class Topic(BaseModel):
+    topic_title: str
+    concept: str
+    breakdown: str = ""
+    constraints: str = ""
+    edge_cases: str = ""
+    action_items: List[str] = Field(default_factory=list)
+    common_mistakes: List[str] = Field(default_factory=list)
+    evaluation_path: str = ""
+    expert_heuristic: str = ""
+    reference_guides: Optional[List[str]] = None
+    expert_story: Optional[str] = None
+
+class ModuleStructure(BaseModel):
+    module_title: str
+    module_context: str
+    learning_outcomes: List[str] = Field(default_factory=list)
+    module_constraints: List[str] = Field(default_factory=list)
+    topics: List[Topic] = Field(default_factory=list)
+
+class StudentPersona(BaseModel):
+    name: str
+    context: str
+
+class CourseStructure(BaseModel):
+    course_title: str
+    course_context: str
+    duration_weeks: Optional[int] = None
+    student_personas: List[StudentPersona] = Field(default_factory=list)
+    modules: List[ModuleStructure] = Field(default_factory=list)
+    prompt_theme: str = Field("default", pattern=r"^[a-zA-Z0-9_-]+$")
+    quality_profile: QualityProfile = QualityProfile.STANDARD
+    learner_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
+    code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
+    explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
+    lesson_contract: Optional[LessonContract] = None
+
+def normalize_course_input(payload: dict) -> CourseStructure:
+    if not isinstance(payload, dict):
+        raise ValueError("Payload must be a dictionary")
+    
+    # 1. Tutor wrapper check
+    if "tutor" in payload or "tutor.course_structure" in str(list(payload.keys())):
+        raise ValueError("Expected current course JSON format with course_name, topic, modules, and submodules. Do not pass tutor.course_structure for this migration task.")
+        
+    # 2. Root-level new format check -> Support directly!
+    if "course_title" in payload or "course_context" in payload:
+        return CourseStructure.model_validate(payload)
+        
+    # 3. Required fields checking
+    if "course_name" not in payload:
+        raise ValueError("course_name is required")
+    if "topic" not in payload:
+        raise ValueError("topic is required")
+    if "modules" not in payload or not isinstance(payload["modules"], list):
+        raise ValueError("modules is required")
+        
+    modules_list = []
+    for m_idx, mod in enumerate(payload["modules"]):
+        if not isinstance(mod, dict):
+            raise ValueError(f"modules[{m_idx}] must be a dictionary")
+        if "title" not in mod:
+            raise ValueError(f"modules[{m_idx}].title is required")
+        if "module_context" not in mod:
+            raise ValueError(f"modules[{m_idx}].module_context is required")
+        if "submodules" not in mod or not isinstance(mod["submodules"], list):
+            raise ValueError(f"modules[{m_idx}].submodules is required")
+             
+        topics_list = []
+        for s_idx, sub in enumerate(mod["submodules"]):
+            if not isinstance(sub, dict):
+                raise ValueError(f"modules[{m_idx}].submodules[{s_idx}] must be a dictionary")
+            if "title" not in sub:
+                raise ValueError(f"modules[{m_idx}].submodules[{s_idx}].title is required")
+            if "content_context" not in sub:
+                raise ValueError(f"modules[{m_idx}].submodules[{s_idx}].content_context is required")
+                 
+            topics_list.append(Topic(
+                topic_title=sub["title"],
+                concept=sub["content_context"]
+            ))
+             
+        modules_list.append(ModuleStructure(
+            module_title=mod["title"],
+            module_context=mod["module_context"],
+            topics=topics_list
+        ))
+        
+    return CourseStructure(
+        course_title=payload["course_name"],
+        course_context=payload["topic"],
+        duration_weeks=payload.get("duration_weeks"),
+        modules=modules_list,
+        prompt_theme=payload.get("prompt_theme", "default"),
+        quality_profile=payload.get("quality_profile", QualityProfile.STANDARD),
+        learner_level=payload.get("learner_level", "beginner"),
+        code_example_style=payload.get("code_example_style", "progressive_production"),
+        explanation_depth=payload.get("explanation_depth", "balanced"),
+        lesson_contract=payload.get("lesson_contract")
+    )
