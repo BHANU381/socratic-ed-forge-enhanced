@@ -22,103 +22,84 @@ def clear_style_guide():
         except Exception as e:
             print(f"Error removing style guide: {e}")
 
-# def save_style_guide_rule_internal(new_rule_text, synthesizer):
-#     os.makedirs(os.path.dirname(STYLE_GUIDE_FILE), exist_ok=True)
-#     
-#     rules = []
-#     if os.path.exists(STYLE_GUIDE_FILE):
-#         try:
-#             with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
-#                 data = json.load(f)
-#                 rules = data.get("rules", [])
-#         except Exception as e:
-#             print(f"Error reading style guide file: {e}")
-#             
-#     existing_texts = [r["text"] for r in rules]
-#     matched_text = synthesizer.find_duplicate_rule(existing_texts, new_rule_text)
-#     
-#     timestamp = datetime.datetime.now().isoformat()
-#     
-#     if matched_text != "NEW":
-#         for r in rules:
-#             if r["text"] == matched_text:
-#                 r["count"] = r.get("count", 0) + 1
-#                 r["last_updated"] = timestamp
-#                 break
-#     else:
-#         rule_id = f"rule_{len(rules) + 1:02d}"
-#         rules.append({
-#             "id": rule_id,
-#             "text": new_rule_text,
-#             "count": 1,
-#             "last_updated": timestamp
-#         })
-#         
-#     with open(STYLE_GUIDE_FILE, 'w', encoding='utf-8') as f:
-#         json.dump({"rules": rules}, f, indent=4)
-# 
-# def migrate_old_lessons_if_needed():
-#     if not os.path.exists(ERROR_DIR):
-#         return
-#     
-#     error_files = glob.glob(os.path.join(ERROR_DIR, "*_error.json"))
-#     if not error_files:
-#         return
-#         
-#     print(f"Found {len(error_files)} old experience replay lessons. Migrating to centralized style_guide.json...")
-#     
-#     # local import to avoid circular dependency
-#     from src.agents.core import StyleSynthesizer
-#     
-#     synthesizer = StyleSynthesizer()
-#     
-#     for error_file in error_files:
-#         try:
-#             with open(error_file, 'r', encoding='utf-8') as f:
-#                 error_data = json.load(f)
-#             
-#             error_text = error_data.get("error", "")
-#             
-#             # Find the corresponding fix file
-#             lesson_id = os.path.basename(error_file).replace("_error.json", "")
-#             fix_file = os.path.join(FIX_DIR, f"{lesson_id}_fix.md")
-#             
-#             fixed_content = ""
-#             if os.path.exists(fix_file):
-#                 with open(fix_file, 'r', encoding='utf-8') as f:
-#                     fixed_content = f.read()
-#             
-#             # Synthesize rule
-#             new_rule = synthesizer.synthesize_rule(error_text, fixed_content)
-#             
-#             # Save rule to style_guide.json
-#             save_style_guide_rule_internal(new_rule, synthesizer)
-#             
-#             # Delete old files
-#             os.remove(error_file)
-#             if os.path.exists(fix_file):
-#                 os.remove(fix_file)
-#                 
-#         except Exception as e:
-#             print(f"Error migrating {error_file}: {e}")
-# 
-# def record_lesson(module, submodule, error_text, fixed_content):
-#     """
-#     Records a 'lesson' by generating a style-guide rule and updating the centralized rulebook.
-#     """
-#     # Local import to prevent circular dependency
-#     from src.agents.core import StyleSynthesizer
-#     
-#     synthesizer = StyleSynthesizer()
-#     new_rule_text = synthesizer.synthesize_rule(error_text, fixed_content)
-#     
-#     save_style_guide_rule_internal(new_rule_text, synthesizer)
-#     
-#     # Return a mock safe_id for compatibility
-#     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-#     raw_id = f"{module}_{submodule}_{timestamp}"
-#     safe_id = re.sub(r'[<>:"/\\|?*&]', '_', raw_id)
-#     return safe_id
+def save_style_guide_rule_internal(new_rule_text, synthesizer):
+    os.makedirs(os.path.dirname(STYLE_GUIDE_FILE), exist_ok=True)
+    
+    rules = []
+    if os.path.exists(STYLE_GUIDE_FILE):
+        try:
+            with open(STYLE_GUIDE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                rules = data.get("rules", [])
+        except Exception as e:
+            print(f"Error reading style guide file: {e}")
+            
+    existing_texts = [r["text"] for r in rules]
+    matched_text = synthesizer.find_duplicate_rule(existing_texts, new_rule_text)
+    
+    timestamp = datetime.datetime.now().isoformat()
+    
+    if matched_text != "NEW":
+        for r in rules:
+            if r["text"] == matched_text:
+                r["count"] = r.get("count", 0) + 1
+                r["last_updated"] = timestamp
+                break
+    else:
+        rule_id = f"rule_{len(rules) + 1:02d}"
+        rules.append({
+            "id": rule_id,
+            "text": new_rule_text,
+            "count": 1,
+            "last_updated": timestamp
+        })
+        
+    with open(STYLE_GUIDE_FILE, 'w', encoding='utf-8') as f:
+        json.dump({"rules": rules}, f, indent=4)
+
+def is_noisy_error(error_text: str) -> bool:
+    err = error_text.lower()
+    # word-count complaints
+    if "word-count" in err or "word count" in err or "words" in err or "600-word" in err or "600 word" in err or "600" in err:
+        return True
+    # target-depth or requirements
+    if "target_words" in err or "target words" in err or "too short" in err or "minimum requirement" in err or "mandatory minimum" in err or "length_constraint" in err or "word_count_insufficient" in err or "required depth" in err:
+        return True
+    # arbitrary lesson-duration complaints / 30-40 minute lesson expectations
+    if "duration" in err or "30-40" in err or "30–40" in err or "minute" in err:
+        return True
+    # heading structure complaints when deterministic validation passed
+    if "heading" in err or "hierarchy" in err or "nesting" in err or "structure" in err:
+        return True
+    # patch editor execution failures
+    if "patch editor" in err or "execution failure" in err or "failed to find" in err or "heading not found" in err:
+        return True
+    # semantic evaluator uncertainty
+    if "uncertainty" in err or "not sure" in err or "uncertain" in err:
+        return True
+    return False
+
+def record_lesson(module, submodule, error_text, fixed_content):
+    """
+    Records a 'lesson' by generating a style-guide rule and updating the centralized rulebook.
+    """
+    if is_noisy_error(error_text):
+        print(f"LearningEngine: Skipped learning noisy error pattern: '{error_text}'")
+        return "skipped"
+
+    # Local import to prevent circular dependency
+    from src.agents.core import StyleSynthesizer
+    
+    synthesizer = StyleSynthesizer()
+    new_rule_text = synthesizer.synthesize_rule(error_text, fixed_content)
+    
+    save_style_guide_rule_internal(new_rule_text, synthesizer)
+    
+    # Return a mock safe_id for compatibility
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    raw_id = f"{module}_{submodule}_{timestamp}"
+    safe_id = re.sub(r'[<>:"/\\|?*&]', '_', raw_id)
+    return safe_id
 
 def get_learned_lessons():
     """

@@ -182,3 +182,39 @@ def test_telemetry_structure(tmp_path):
     assert "severity" in first_failure
     assert "issue_type" in first_failure
     assert "message" in first_failure
+
+def test_quality_profile_light_runs_evaluator(tmp_path):
+    from src.models.schemas import QualityProfile
+    
+    course = CourseInput(
+        course_name="course-light",
+        topic="Topic",
+        duration_weeks=4,
+        quality_profile=QualityProfile.LIGHT,
+        modules=[]
+    )
+    
+    orch = Orchestrator(course, session_dir=tmp_path)
+    
+    # Mock generator to succeed
+    orch.generator.generate = MagicMock(return_value="### Introduction\nContent")
+    orch.generator.required_headings = ["### Introduction"]
+    
+    # Mock deterministic validation to pass
+    from src.validators import markdown_validator
+    import src.validators.lesson_contract_validator as cv
+    markdown_validator.validate_markdown_structure = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    cv.validate_lesson_contract = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    
+    # Mock semantic evaluator
+    orch.semantic_evaluator.evaluate = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    
+    submodule = MagicMock()
+    submodule.title = "Submodule 1.1"
+    submodule.content_context = "Context"
+    
+    status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    
+    # Assert that the semantic evaluator was called
+    assert orch.semantic_evaluator.evaluate.call_count > 0
+    assert status == "approved"

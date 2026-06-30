@@ -28,6 +28,17 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Explanation Depth: {explanation_depth}
 - Module Position: {module_position}
 
+### SPECIFIC TOPIC GUIDANCE (FOLLOW STRICTLY)
+- Topic Breakdown: {breakdown}
+- Topic Constraints: {topic_constraints}
+- Edge Cases to Address: {edge_cases}
+- Action Items:
+{action_items}
+- Common Mistakes to Warn Against:
+{common_mistakes}
+- Expert Heuristic: {expert_heuristic}
+- Evaluation Path: {evaluation_path}
+
 {learner_level_rules}
 
 ### CONSTRAINTS (CRITICAL)

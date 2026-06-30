@@ -137,8 +137,12 @@ def validate_lesson_contract(content: str, contract: LessonContract) -> Validati
                     section=req.title
                 ))
                 
-            if req.min_words is not None:
+            target_val = getattr(req, "target_words", None)
+            min_val = req.min_words
+            
+            if min_val is not None:
                 has_usefulness = sections_usefulness.get(matched_heading_normalized, False)
+                target = target_val if target_val is not None else min_val
                 
                 if matched_word_count == 0 and not has_usefulness:
                     issues.append(ValidationIssue(
@@ -147,16 +151,22 @@ def validate_lesson_contract(content: str, contract: LessonContract) -> Validati
                         message=f"Section '{req.title}' is empty.",
                         section=req.title
                     ))
-                elif matched_word_count < req.min_words:
-                    if matched_word_count < (req.min_words * 0.5) and not has_usefulness:
+                elif matched_word_count < min_val:
+                    if matched_word_count < (min_val * 0.5) and not has_usefulness:
                         severity = "blocker"
                     else:
                         severity = "warning"
-                        
                     issues.append(ValidationIssue(
                         severity=severity,
                         issue_type="section_too_short",
-                        message=f"Section '{req.title}' has {matched_word_count} words, which is below the minimum word count limit of {req.min_words} words. Useful elements present: {has_usefulness}",
+                        message=f"Section '{req.title}' has {matched_word_count} words, which is below the minimum word count limit of {min_val} words. Useful elements: {has_usefulness}",
+                        section=req.title
+                    ))
+                elif matched_word_count < target:
+                    issues.append(ValidationIssue(
+                        severity="warning",
+                        issue_type="section_below_target",
+                        message=f"Section '{req.title}' has {matched_word_count} words, which is below the target depth of {target} words.",
                         section=req.title
                     ))
                     

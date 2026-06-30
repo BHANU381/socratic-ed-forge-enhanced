@@ -7,7 +7,7 @@ from src.utils.prompt_loader import load_prompt
 def test_prompt_loader_loads_default():
     """Validates that passing theme='default' successfully loads a template."""
     # This assumes 'content_generator.md' exists in src/prompts/default/
-    content, headings = load_prompt("content_generator.md", theme="default", sub_title="test", course_name="test", course_topic="test", duration_weeks="test", module_title="test", submodule_title="test", content_context="test", module_context="test", running_summary="test", learned_rules="test", source_context="test", learning_context_block="test", lesson_contract="test", quality_profile="test", learner_level="test", code_example_style="test", explanation_depth="test", module_position="test", learner_level_rules="test")
+    content, headings = load_prompt("content_generator.md", theme="default", sub_title="test", course_name="test", course_topic="test", duration_weeks="test", module_title="test", submodule_title="test", content_context="test", module_context="test", running_summary="test", learned_rules="test", source_context="test", learning_context_block="test", lesson_contract="test", quality_profile="test", learner_level="test", code_example_style="test", explanation_depth="test", module_position="test", learner_level_rules="test", breakdown="test", topic_constraints="test", edge_cases="test", action_items="test", common_mistakes="test", expert_heuristic="test", evaluation_path="test")
     assert content is not None
     assert isinstance(content, str)
     assert len(content) > 0
@@ -65,7 +65,14 @@ def test_semantic_evaluator_prompt_bans_word_count():
         "module_position": "test",
         "lesson_contract": "test",
         "running_summary": "test",
-        "draft": "test"
+        "draft": "test",
+        "breakdown": "test",
+        "topic_constraints": "test",
+        "edge_cases": "test",
+        "action_items": "test",
+        "common_mistakes": "test",
+        "expert_heuristic": "test",
+        "evaluation_path": "test"
     }
     content, _ = load_prompt("semantic_evaluator.md", theme="default", **dummy_kwargs)
     

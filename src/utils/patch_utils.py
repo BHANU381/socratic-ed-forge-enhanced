@@ -1,5 +1,13 @@
 import re
 
+def normalize_heading(title: str) -> str:
+    title = title.strip().lower()
+    if title.startswith("#"):
+        title = title.lstrip("#").strip()
+    if ":" in title:
+        title = title.split(":", 1)[0].strip()
+    return title
+
 def apply_section_patch(draft: str, heading: str, replacement_content: str) -> str:
     """
     Deterministically replaces a section of markdown content under a specific heading.
@@ -8,7 +16,6 @@ def apply_section_patch(draft: str, heading: str, replacement_content: str) -> s
     """
     lines = draft.splitlines()
     
-    # Clean the target heading of any leading '#' marks and whitespace
     target_heading = heading.strip().lower()
     if target_heading.startswith("#"):
         target_heading = target_heading.lstrip("#").strip()
@@ -23,7 +30,7 @@ def apply_section_patch(draft: str, heading: str, replacement_content: str) -> s
     
     for parsed in parsed_lines:
         if parsed.is_heading and not parsed.is_inside_fence:
-            if parsed.heading_title.lower() == target_heading:
+            if normalize_heading(parsed.heading_title) == normalize_heading(target_heading):
                 start_idx = parsed.line_number - 1 # 0-indexed
                 start_level = parsed.heading_level
                 heading_line = parsed.original_line
@@ -53,7 +60,7 @@ def apply_section_patch(draft: str, heading: str, replacement_content: str) -> s
         first_line_match = heading_pattern.match(first_line)
         if first_line_match:
             first_heading_text = first_line_match.group(2).strip().lower()
-            if first_heading_text == target_heading:
+            if normalize_heading(first_heading_text) == normalize_heading(target_heading):
                 # Remove the duplicate heading from the replacement content
                 replacement_lines = replacement_lines[1:]
     

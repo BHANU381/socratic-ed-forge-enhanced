@@ -17,28 +17,32 @@
       "aliases": ["Hook"],
       "required": true,
       "required_level": 3,
-      "min_words": 10
+      "min_words": 8,
+      "target_words": 20
     },
     {
       "title": "Core Idea",
       "aliases": ["Core Concept", "The Concept"],
       "required": true,
       "required_level": 4,
-      "min_words": 50
+      "min_words": 180,
+      "target_words": 600
     },
     {
       "title": "Implementation",
       "aliases": ["How it Works", "Example", "Code Example"],
       "required": true,
       "required_level": 4,
-      "min_words": 50
+      "min_words": 180,
+      "target_words": 600
     },
     {
       "title": "Why it Matters",
       "aliases": ["Takeaway", "Summary"],
       "required": true,
       "required_level": 4,
-      "min_words": 20
+      "min_words": 80,
+      "target_words": 200
     }
   ]
 }

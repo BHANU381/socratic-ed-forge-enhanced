@@ -54,8 +54,22 @@ def validate_markdown_structure(content: str) -> ValidationResult:
         if parsed_line.is_inside_fence:
             return "allowed"
         
+        line_lower = parsed_line.original_line.lower().strip()
+        
+        # Check blockquotes or quotes
+        if line_lower.startswith(">") or (line_lower.startswith('"') and line_lower.endswith('"')) or (line_lower.startswith("'") and line_lower.endswith("'")):
+            return "warning"
+            
+        # Expanded keywords for templates/instructions/examples/code instructions
+        template_keywords = [
+            "example", "template", "prompt", "input", "document", 
+            "debugging", "paste", "instruction", "snippet", "comment", "guide"
+        ]
+        
+        if any(k in line_lower for k in template_keywords):
+            return "warning"
+        
         # Check context window for template indicators
-        template_keywords = ["example:", "template:", "prompt:", "input:", "document:"]
         for ctx_line in context_lines:
             ctx_lower = ctx_line.original_line.lower()
             if any(k in ctx_lower for k in template_keywords):

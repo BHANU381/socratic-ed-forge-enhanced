@@ -37,6 +37,7 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Common Mistakes to Warn Against:
 {common_mistakes}
 - Expert Heuristic: {expert_heuristic}
+- Evaluation Path: {evaluation_path}
 
 {learner_level_rules}
 

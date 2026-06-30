@@ -31,6 +31,7 @@ class SectionRequirement(BaseModel):
     title: str
     aliases: List[str] = Field(default_factory=list)
     min_words: Optional[int] = None
+    target_words: Optional[int] = None
     required: bool = True
     required_level: Optional[int] = None
 

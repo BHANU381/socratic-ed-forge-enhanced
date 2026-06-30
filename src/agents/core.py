@@ -356,6 +356,13 @@ class ContentGenerator(AgentBase):
         merged_kwargs.setdefault("code_example_style", "progressive_production")
         merged_kwargs.setdefault("explanation_depth", "balanced")
         merged_kwargs.setdefault("module_position", "")
+        merged_kwargs.setdefault("breakdown", "")
+        merged_kwargs.setdefault("topic_constraints", "")
+        merged_kwargs.setdefault("edge_cases", "")
+        merged_kwargs.setdefault("action_items", "")
+        merged_kwargs.setdefault("common_mistakes", "")
+        merged_kwargs.setdefault("expert_heuristic", "")
+        merged_kwargs.setdefault("evaluation_path", "")
 
         prompt, self.required_headings = load_prompt("content_generator.md", 
                              theme=self.theme,
@@ -623,50 +630,50 @@ class Archivist(AgentBase):
 #         return self._run_with_retry(prompt)
 # 
 # 
-# class StyleSynthesizer(AgentBase):
-#     def __init__(self, model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
-#         super().__init__(role="style-synthesizer", model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
-#         self.system_instruction = (
-#             "You are a professional technical QA manager applying strict NLP compression. "
-#             "Never use conversational filler."
-#         )
-# 
-#     def synthesize_rule(self, critique: str, correction: str) -> str:
-#         prompt, _ = load_prompt("style_synthesizer_rule.md", 
-#                              theme=self.theme,
-#                              critique=critique,
-#                              correction=correction)
-#         rule = self._run_with_retry(prompt).strip()
-#         # Clean up any quotes, markdown bullet prefix, or newlines
-#         rule = rule.replace('"', '').replace("'", "").lstrip("-* ").strip()
-#         return rule
-# 
-#     def find_duplicate_rule(self, existing_rules: list, new_rule: str) -> str:
-#         """
-#         Check if the new_rule is semantically similar to any of the existing_rules.
-#         Returns the matching rule's exact text if found, or 'NEW' if it doesn't match any.
-#         """
-#         if not existing_rules:
-#             return "NEW"
-#             
-#         # Format existing rules for the prompt
-#         rules_formatted = "\n".join([f"- {r}" for r in existing_rules])
-#         
-#         prompt, _ = load_prompt("style_synthesizer_duplicate.md", 
-#                              theme=self.theme,
-#                              rules_formatted=rules_formatted,
-#                              new_rule=new_rule)
-#         
-#         response = self._run_with_retry(prompt).strip()
-#         # Clean up return value
-#         cleaned_response = response.replace('"', '').replace("'", "").lstrip("-* ").strip()
-#         
-#         # Double check if the cleaned response exactly matches one of the existing rules (ignoring case/whitespace)
-#         for r in existing_rules:
-#             if r.lower() == cleaned_response.lower():
-#                 return r
-#         
-#         return "NEW"
+class StyleSynthesizer(AgentBase):
+    def __init__(self, model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
+        super().__init__(role="style-synthesizer", model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = (
+            "You are a professional technical QA manager applying strict NLP compression. "
+            "Never use conversational filler."
+        )
+
+    def synthesize_rule(self, critique: str, correction: str) -> str:
+        prompt, _ = load_prompt("style_synthesizer_rule.md", 
+                             theme=self.theme,
+                             critique=critique,
+                             correction=correction)
+        rule = self._run_with_retry(prompt).strip()
+        # Clean up any quotes, markdown bullet prefix, or newlines
+        rule = rule.replace('"', '').replace("'", "").lstrip("-* ").strip()
+        return rule
+
+    def find_duplicate_rule(self, existing_rules: list, new_rule: str) -> str:
+        """
+        Check if the new_rule is semantically similar to any of the existing_rules.
+        Returns the matching rule's exact text if found, or 'NEW' if it doesn't match any.
+        """
+        if not existing_rules:
+            return "NEW"
+            
+        # Format existing rules for the prompt
+        rules_formatted = "\n".join([f"- {r}" for r in existing_rules])
+        
+        prompt, _ = load_prompt("style_synthesizer_duplicate.md", 
+                             theme=self.theme,
+                             rules_formatted=rules_formatted,
+                             new_rule=new_rule)
+        
+        response = self._run_with_retry(prompt).strip()
+        # Clean up return value
+        cleaned_response = response.replace('"', '').replace("'", "").lstrip("-* ").strip()
+        
+        # Double check if the cleaned response exactly matches one of the existing rules (ignoring case/whitespace)
+        for r in existing_rules:
+            if r.lower() == cleaned_response.lower():
+                return r
+        
+        return "NEW"
 # 
 # class CurriculumJudgeEval(AgentBase):
 #     def __init__(self, model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
@@ -728,6 +735,13 @@ class SemanticEvaluator(AgentBase):
         kwargs.setdefault("code_example_style", "progressive_production")
         kwargs.setdefault("explanation_depth", "balanced")
         kwargs.setdefault("module_position", "")
+        kwargs.setdefault("breakdown", "")
+        kwargs.setdefault("topic_constraints", "")
+        kwargs.setdefault("edge_cases", "")
+        kwargs.setdefault("action_items", "")
+        kwargs.setdefault("common_mistakes", "")
+        kwargs.setdefault("expert_heuristic", "")
+        kwargs.setdefault("evaluation_path", "")
 
         prompt, _ = load_prompt("semantic_evaluator.md",
                              theme=self.theme,
@@ -771,6 +785,13 @@ class PatchEditor(AgentBase):
         kwargs.setdefault("explanation_depth", "balanced")
         kwargs.setdefault("module_position", "")
         kwargs.setdefault("patch_mode", "fix_structure")
+        kwargs.setdefault("breakdown", "")
+        kwargs.setdefault("topic_constraints", "")
+        kwargs.setdefault("edge_cases", "")
+        kwargs.setdefault("action_items", "")
+        kwargs.setdefault("common_mistakes", "")
+        kwargs.setdefault("expert_heuristic", "")
+        kwargs.setdefault("evaluation_path", "")
 
         prompt, _ = load_prompt("patch_editor.md",
                              theme=self.theme,

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist
 from src.utils.logger import log_event, update_status, update_telemetry
-# from src.utils.learning_engine import record_lesson
+from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
 from src.utils.cleanup_utils import final_markdown_cleanup
 from src.models.schemas import CourseStructure, ModuleStructure, Topic, TelemetryData, RunManifest, LessonContract, SectionRequirement, QualityProfile, normalize_course_input
@@ -552,8 +552,6 @@ class Orchestrator:
         # 3. Semantic Evaluator -> Patch (Max 2 retries)
         sem_attempts = 0
         while sem_attempts < 2:
-            if self.quality_profile == QualityProfile.LIGHT:
-                break
             
             self.telemetry["current_agent"] = "Semantic Evaluator"
             self.telemetry["active_iterations"] = 1 + det_attempts + sem_attempts + 1
@@ -646,35 +644,31 @@ class Orchestrator:
             sem_attempts += 1
             
         # Final evaluation
-        if self.quality_profile != QualityProfile.LIGHT:
-            self.telemetry["current_agent"] = "Semantic Evaluator"
-            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            
-            log_event("Semantic Evaluator", "Performing final semantic evaluation...")
-    
-            final_eval = self.semantic_evaluator.evaluate(
-                draft=draft,
-                lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
-                course_topic=self.course.course_context,
-                submodule_title=sub_title,
-                running_summary=running_summary,
-                learner_level=getattr(self.course, "learner_level", "beginner"),
-                code_example_style=getattr(self.course, "code_example_style", "progressive_production"),
-                explanation_depth=getattr(self.course, "explanation_depth", "balanced"),
-                module_position=module_position,
-                **addon_kwargs
-            )
-            self.update_agent_tokens("semantic_evaluator", self.semantic_evaluator)
-            
-            blockers = [i for i in final_eval.issues if i.severity == "blocker"]
-            warnings = [i for i in final_eval.issues if i.severity == "warning"]
-            if blockers:
-                log_event("Semantic Evaluator", f"Failed: Final blockers still present: {blockers[0].message}")
-            else:
-                log_event("Semantic Evaluator", f"Passed: Evaluation passed. {len(warnings)} warnings found.")
+        self.telemetry["current_agent"] = "Semantic Evaluator"
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        
+        log_event("Semantic Evaluator", "Performing final semantic evaluation...")
+
+        final_eval = self.semantic_evaluator.evaluate(
+            draft=draft,
+            lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
+            course_topic=self.course.course_context,
+            submodule_title=sub_title,
+            running_summary=running_summary,
+            learner_level=getattr(self.course, "learner_level", "beginner"),
+            code_example_style=getattr(self.course, "code_example_style", "progressive_production"),
+            explanation_depth=getattr(self.course, "explanation_depth", "balanced"),
+            module_position=module_position,
+            **addon_kwargs
+        )
+        self.update_agent_tokens("semantic_evaluator", self.semantic_evaluator)
+        
+        blockers = [i for i in final_eval.issues if i.severity == "blocker"]
+        warnings = [i for i in final_eval.issues if i.severity == "warning"]
+        if blockers:
+            log_event("Semantic Evaluator", f"Failed: Final blockers still present: {blockers[0].message}")
         else:
-            blockers = []
-            warnings = []
+            log_event("Semantic Evaluator", f"Passed: Evaluation passed. {len(warnings)} warnings found.")
         
         self.telemetry["current_agent"] = "None"
         self.telemetry["active_iterations"] = 0
@@ -846,8 +840,7 @@ class Orchestrator:
             if repeated_blockers:
                 log_event("LearningEngine", f"Repeated blocker patterns detected: {repeated_blockers}. Recording lesson.")
                 for pattern in repeated_blockers:
-                    # record_lesson(mod.module_title, "Repeated_Pattern", pattern, "")
-                    pass
+                    record_lesson(mod.module_title, "Repeated_Pattern", pattern, "")
                     
             # Reset local submodule failure tracking for the next module
             self.telemetry["failure_reasons"] = []
@@ -957,22 +950,119 @@ def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str
         for sub in topics:
             sub_title = getattr(sub, "topic_title", getattr(sub, "title", ""))
             expected_submodules.add(sub_title.strip().lower())
+
+    lines = master_content.splitlines()
+    in_code_block = False
+    current_section = ""
     
-    # Check for known mock/test placeholders case-insensitively
-    placeholders = [
+    # Pre-compile matching boundaries and placeholder regexes
+    todo_standalone = re.compile(r"^(?:#|\/\/|\/\*|<!--|\s)*TODO(?:\s*:\s*.*)?$|^\s*TODO\s*$|^\s*\[TODO\]\s*$|^\s*\{\{TODO\}\}\s*$")
+    tbd_standalone = re.compile(r"^\s*TBD\s*$|^\s*\[TBD\]\s*$|^\s*TBD\s*:\s*.*$")
+    bracket_placeholder = re.compile(r"(?i)\[Insert\s+[^\]]+\]|\[Placeholder\s+[^\]]+\]|\[Insert\]")
+    
+    generic_placeholders = [
         "mocked response",
         "this is a mock core concepts",
         "this is a mock practical application",
         "socratic ed-forge is great",
-        "lorem ipsum",
-        "todo",
-        "tbd",
-        "[insert]"
+        "lorem ipsum"
     ]
-    for p in placeholders:
-        if p in master_content.lower():
-            return f"Contains placeholder: '{p}'"
+    
+    missing_content_phrases = [
+        "coming soon",
+        "fill this in",
+        "replace this",
+        "add details here"
+    ]
+
+    instructional_keywords = [
+        "avoid", "remove", "clean", "hygiene", "cleanup", "example", 
+        "template", "prompt", "explain", "explanation", "tutorial", 
+        "guide", "debugging", "paste", "snippet", "comment", "anti-pattern"
+    ]
+
+    for idx, line in enumerate(lines):
+        line_stripped = line.strip()
+        line_lower = line.lower()
+        
+        if line_stripped.startswith("```"):
+            in_code_block = not in_code_block
+            continue
             
+        if not in_code_block and re.match(r"^#{1,6}\s+", line_stripped):
+            current_section = line_stripped.lstrip("#").strip().lower()
+            
+        is_bad_example_section = any(k in current_section for k in ["bad example", "anti-pattern", "before cleanup", "poor practice", "poor", "before"])
+        
+        matched_term = None
+        rule_id = None
+        reason = None
+        severity = "allow"
+        
+        if todo_standalone.match(line_stripped):
+            matched_term = line_stripped
+            rule_id = "unresolved_standalone_todo"
+            reason = "Standalone unresolved TODO marker"
+            severity = "blocker"
+        elif "todo:" in line_lower and len(line_stripped) < 150:
+            is_instructional = any(k in line_lower for k in instructional_keywords)
+            if is_instructional:
+                severity = "allow"
+            else:
+                matched_term = line_stripped
+                rule_id = "unresolved_todo_directive"
+                reason = "Unresolved TODO directive in final content"
+                severity = "blocker"
+        elif tbd_standalone.match(line_stripped):
+            matched_term = line_stripped
+            rule_id = "unresolved_tbd"
+            reason = "Standalone unresolved TBD marker"
+            severity = "blocker"
+        elif bracket_placeholder.search(line_stripped):
+            matched_term = bracket_placeholder.search(line_stripped).group(0)
+            rule_id = "unresolved_bracket_placeholder"
+            reason = "Unresolved bracket placeholder"
+            severity = "blocker"
+        else:
+            for p in generic_placeholders:
+                if p in line_lower:
+                    matched_term = p
+                    rule_id = "mock_leakage"
+                    reason = f"Mocked text leakage '{p}'"
+                    severity = "blocker"
+                    break
+            
+            if severity == "allow":
+                for phrase in missing_content_phrases:
+                    if phrase in line_lower and len(line_stripped) < 100:
+                        matched_term = phrase
+                        rule_id = "missing_content_placeholder"
+                        reason = f"Unresolved placeholder phrase '{phrase}'"
+                        severity = "blocker"
+                        break
+                        
+        if severity == "blocker":
+            if in_code_block and is_bad_example_section:
+                severity = "warning"
+                continue
+                
+            if not in_code_block:
+                is_quoted = line_stripped.startswith(">") or (line_stripped.startswith('"') and line_stripped.endswith('"')) or (line_stripped.startswith("'") and line_stripped.endswith("'"))
+                is_instructional = any(k in line_lower for k in instructional_keywords) or any(k in current_section for k in instructional_keywords)
+                if is_quoted or is_instructional:
+                    severity = "warning"
+                    continue
+            
+            line_no = idx + 1
+            error_details = (
+                f"Rule: {rule_id}\n"
+                f"Artifact: final_markdown\n"
+                f"Line: {line_no}\n"
+                f"Snippet: \"{line_stripped}\"\n"
+                f"Reason: {reason}"
+            )
+            return f"Contains placeholder: '{matched_term}'\n{error_details}"
+
     # Find generated module titles in the text
     # e.g., # Module 1: Introduction to Agents
     gen_modules = re.findall(r'^# Module \d+:\s*(.*)$', master_content, re.MULTILINE)
