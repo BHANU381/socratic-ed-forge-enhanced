@@ -29,6 +29,12 @@
             "text": "Mandatory: Every technical document generation must include the Core Idea section as the primary header.",
             "count": 1,
             "last_updated": "2026-06-30T14:26:13.632250"
+        },
+        {
+            "id": "rule_06",
+            "text": "Mocked Response",
+            "count": 11,
+            "last_updated": "2026-07-01T10:17:16.901072"
         }
     ]
 }
