@@ -50,7 +50,7 @@ def validate_markdown_structure(content: str) -> ValidationResult:
     
     from src.utils.markdown_parser import parse_markdown_lines
     
-    def classify_placeholder_occurrence(parsed_line, context_lines):
+    def classify_placeholder_occurrence(parsed_line, context_lines, rule_id=None):
         if parsed_line.is_inside_fence:
             return "allowed"
         
@@ -60,19 +60,23 @@ def validate_markdown_structure(content: str) -> ValidationResult:
         if line_lower.startswith(">") or (line_lower.startswith('"') and line_lower.endswith('"')) or (line_lower.startswith("'") and line_lower.endswith("'")):
             return "warning"
             
-        # Expanded keywords for templates/instructions/examples/code instructions
-        template_keywords = [
-            "example", "template", "prompt", "input", "document", 
-            "debugging", "paste", "instruction", "snippet", "comment", "guide"
+        if rule_id in ["unresolved_standalone_todo", "unresolved_todo_directive", "unresolved_tbd", "unresolved_bracket_placeholder", "missing_content_placeholder"]:
+            return "blocker"
+            
+        # Instructional keywords
+        instructional_keywords = [
+            "avoid", "remove", "clean", "hygiene", "cleanup", "example", 
+            "template", "prompt", "explain", "explanation", "tutorial", 
+            "guide", "debugging", "paste", "snippet", "comment", "anti-pattern"
         ]
         
-        if any(k in line_lower for k in template_keywords):
+        if any(k in line_lower for k in instructional_keywords):
             return "warning"
         
         # Check context window for template indicators
         for ctx_line in context_lines:
             ctx_lower = ctx_line.original_line.lower()
-            if any(k in ctx_lower for k in template_keywords):
+            if any(k in ctx_lower for k in instructional_keywords):
                 return "warning"
                 
         return "blocker"
@@ -81,25 +85,26 @@ def validate_markdown_structure(content: str) -> ValidationResult:
     context_window = []
     
     for parsed in parsed_lines:
-        # Maintain context window of last 3 lines
+        # Maintain context window of last 14 lines
         context_window.append(parsed)
-        if len(context_window) > 4:
+        if len(context_window) > 15:
             context_window.pop(0)
             
         line = parsed.original_line
         
         # Check placeholders
-        for pattern, msg_prefix in placeholder_patterns:
-            matches = pattern.findall(line)
-            if matches:
-                severity = classify_placeholder_occurrence(parsed, context_window[:-1])
-                if severity != "allowed":
-                    issues.append(ValidationIssue(
-                        severity=severity,
-                        issue_type="placeholder",
-                        message=f"{msg_prefix} at line {parsed.line_number}: '{line.strip()}'",
-                        section=None
-                    ))
+        from src.utils.placeholder_classifier import classify_placeholder
+        ctx_strings = [p.original_line for p in context_window[:-1]]
+        res_class = classify_placeholder(line, ctx_strings)
+        if res_class.get("is_blocked"):
+            severity = classify_placeholder_occurrence(parsed, context_window[:-1], res_class.get("rule_id"))
+            if severity != "allowed":
+                issues.append(ValidationIssue(
+                    severity=severity,
+                    issue_type="placeholder",
+                    message=f"{res_class['reason']} at line {parsed.line_number}: '{line.strip()}'",
+                    section=None
+                ))
                     
         # Check unresolved variables
         for m in var_re.finditer(line):

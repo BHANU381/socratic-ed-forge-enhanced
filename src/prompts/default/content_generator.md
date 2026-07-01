@@ -16,6 +16,16 @@ Curriculum context to follow strictly:
 
 {learning_context_block}
 
+### ENVIRONMENT & GROUNDING MATERIALS
+{tool_stack}
+
+{grounding_context}
+
+### GROUNDING INSTRUCTIONS
+Use the course JSON as the teaching target. Use grounding_context as supporting source material. Prefer topic chunks for topic-specific detail, module chunks for block-level continuity, and course chunks for overall alignment. Do not repeat the same chunk idea multiple times. If grounding_context is empty, generate from the course JSON as usual.
+
+Do not invent a separate tools section unless the active lesson format requires it. Mention tools/tech stack only when naturally relevant to the explanation or examples.
+
 ### PREVIOUSLY COVERED (DO NOT REPEAT)
 The following concepts have already been covered in prior chapters. Do not repeat them here unless absolutely necessary for context.
 ```
@@ -49,6 +59,7 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Actively include programming code blocks (Python, SQL, HTML, etc.), formulas, or technical diagrams if the topic is even remotely technical, but ONLY if they strictly adhere to the {code_example_style} rules and `{learner_level_rules}` progression rules. If the course is non-technical, do NOT force code examples (use activities, checklists, or worked examples instead).
 - Do NOT use conversational filler or repetitive formulaic phrases (e.g., 'strategic partner', 'serves as the foundation', 'single source of truth', 'systematic approach', 'iterative workflow', 'bridges the gap').
 - Rely ONLY on the provided CONTEXT for the factual direction of the lesson. Do not hallucinate external topics.
+- If you include learner-facing fill-in slots, place them only inside clearly labeled prompt templates, diagnostic templates, learner templates, or fill-in examples. Use uppercase bracketed slots such as [EXPECTED BEHAVIOR] or [PASTE ERROR MESSAGE HERE]. Never leave authoring placeholders such as [TODO], [Insert content here], or [Add example later].
 
 ### TEMPLATE / FORMAT
 Output must strictly follow this Markdown structure. Your first output line must be exactly `### Introduction`.

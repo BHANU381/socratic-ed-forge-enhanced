@@ -1,5 +1,17 @@
-import sys
-import os
+import pytest
+from unittest.mock import patch, MagicMock
 
-# Add the project root to sys.path so tests can find the 'src' package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+@pytest.fixture(autouse=True)
+def mock_grounding_auditor_by_default(request):
+    # Bypass default mock if executing the dedicated auditor test suite
+    if "test_grounding_auditor_tdd" in request.node.fspath.strpath:
+        yield
+    else:
+        with patch("src.agents.core.GroundingFaithfulnessAuditor.audit_grounding") as mock_audit:
+            mock_audit.return_value = {
+                "status": "APPROVED",
+                "blockers": [],
+                "warnings": [],
+                "notes": []
+            }
+            yield

@@ -1,3 +1,34 @@
 {
-    "rules": []
+    "rules": [
+        {
+            "id": "rule_01",
+            "text": "Replace all sensitive credentials with abstract, non-executable tokens rather than bracketed placeholders to prevent accidental data exposure.",
+            "count": 1,
+            "last_updated": "2026-06-30T12:59:46.945309"
+        },
+        {
+            "id": "rule_02",
+            "text": "Replace all bracketed placeholders with specific project requirements before finalizing technical documentation or prompts.",
+            "count": 3,
+            "last_updated": "2026-06-30T16:57:48.546742"
+        },
+        {
+            "id": "rule_03",
+            "text": "Enforce strict adherence to standardized design tokens; explicitly prohibit arbitrary magic number utility classes in all code generation.",
+            "count": 2,
+            "last_updated": "2026-06-30T14:23:40.338628"
+        },
+        {
+            "id": "rule_04",
+            "text": "Always include the mandatory Practical Walkthrough section in all generated technical documentation.",
+            "count": 1,
+            "last_updated": "2026-06-30T14:23:51.290039"
+        },
+        {
+            "id": "rule_05",
+            "text": "Mandatory: Every technical document generation must include the Core Idea section as the primary header.",
+            "count": 1,
+            "last_updated": "2026-06-30T14:26:13.632250"
+        }
+    ]
 }

@@ -357,12 +357,15 @@ class ContentGenerator(AgentBase):
         merged_kwargs.setdefault("explanation_depth", "balanced")
         merged_kwargs.setdefault("module_position", "")
         merged_kwargs.setdefault("breakdown", "")
+        merged_kwargs.setdefault("concept", "")
         merged_kwargs.setdefault("topic_constraints", "")
         merged_kwargs.setdefault("edge_cases", "")
         merged_kwargs.setdefault("action_items", "")
         merged_kwargs.setdefault("common_mistakes", "")
         merged_kwargs.setdefault("expert_heuristic", "")
         merged_kwargs.setdefault("evaluation_path", "")
+        merged_kwargs.setdefault("tool_stack", "Tools: None\nTech Stack: None")
+        merged_kwargs.setdefault("grounding_context", "Grounding Context: Empty")
 
         prompt, self.required_headings = load_prompt("content_generator.md", 
                              theme=self.theme,
@@ -827,5 +830,63 @@ class PatchEditor(AgentBase):
                 replacement_markdown="",
                 reason=f"Failed to parse PatchEditor JSON: {str(e)}"
             )
+
+class GroundingFaithfulnessAuditor(AgentBase):
+    def __init__(self, role="grounding-faithfulness-auditor", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are a strict Grounding Faithfulness Auditor. You must return only valid JSON matching the exact schema."
+
+    def audit_grounding(self, content, course_context, module_context, topic_context, tool_stack, grounding_context):
+        import json
+        formatted_tool_stack = json.dumps(tool_stack, indent=2)
+        formatted_grounding_context = json.dumps(grounding_context, indent=2)
+
+        prompt, _ = load_prompt(
+            "grounding_faithfulness_auditor.md",
+            theme=self.theme,
+            content=content,
+            course_context=course_context,
+            module_context=module_context,
+            topic_context=topic_context,
+            tool_stack=formatted_tool_stack,
+            grounding_context=formatted_grounding_context
+        )
+        response_text = self._run_with_retry(prompt)
+        
+        try:
+            clean_text = response_text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            clean_text = clean_text.strip()
+            
+            result = json.loads(clean_text)
+            if "status" not in result:
+                result["status"] = "FAILED"
+            if "blockers" not in result:
+                result["blockers"] = []
+            if "warnings" not in result:
+                result["warnings"] = []
+            if "notes" not in result:
+                result["notes"] = []
+            return result
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("socratic_ed_forge")
+            logger.error(f"[Grounding Faithfulness Auditor] Malformed JSON response: {response_text}. Error: {str(e)}")
+            return {
+                "status": "FAILED",
+                "blockers": [
+                    {
+                        "section": "General",
+                        "issue": f"Malformed JSON response from auditor: {str(e)}",
+                        "suggested_fix": "Regenerate or fix response format."
+                    }
+                ],
+                "warnings": [],
+                "notes": []
+            }
+
 
 

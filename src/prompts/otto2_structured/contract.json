@@ -1,0 +1,96 @@
+{
+  "lesson_contract_name": "otto2_structured",
+  "heading_rules": {
+    "submodule_heading_level": 2,
+    "main_content_heading": {
+      "canonical": "Hook",
+      "required_level": 3,
+      "must_be_unique_per_submodule": true
+    },
+    "required_child_section_level": 4,
+    "optional_child_section_level": 4,
+    "walkthrough_step_level": 4
+  },
+  "sections": [
+    {
+      "title": "Hook",
+      "aliases": [
+        "Hook"
+      ],
+      "required": true,
+      "required_level": 3,
+      "min_words": 8,
+      "target_words": 20
+    },
+    {
+      "title": "Core Idea",
+      "aliases": [
+        "Core Idea"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 380,
+      "target_words": 480
+    },
+    {
+      "title": "Lesson Breakdown",
+      "aliases": [
+        "Lesson Breakdown"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 150,
+      "target_words": 400
+    },
+    {
+      "title": "Practical Walkthrough",
+      "aliases": [
+        "Practical Walkthrough"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 150,
+      "target_words": 500
+    },
+    {
+      "title": "Edge Cases",
+      "aliases": [
+        "Edge Cases"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 80,
+      "target_words": 250
+    },
+    {
+      "title": "Common Mistakes",
+      "aliases": [
+        "Common Mistakes"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 50,
+      "target_words": 250
+    },
+    {
+      "title": "Action Items",
+      "aliases": [
+        "Action Items"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 90,
+      "target_words": 250
+    },
+    {
+      "title": "Why It Matters",
+      "aliases": [
+        "Why It Matters"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 90,
+      "target_words": 200
+    }
+  ]
+}

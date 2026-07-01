@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist
+from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist, GroundingFaithfulnessAuditor
 from src.utils.logger import log_event, update_status, update_telemetry
 from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
@@ -182,6 +182,7 @@ class Orchestrator:
         # Initialize modern agents
         self.generator = ContentGenerator("Content Generator", theme=self.course.prompt_theme)
         self.semantic_evaluator = SemanticEvaluator("Semantic Evaluator", theme=self.course.prompt_theme)
+        self.grounding_auditor = GroundingFaithfulnessAuditor("Grounding Faithfulness Auditor", theme=self.course.prompt_theme)
         self.patch_editor = PatchEditor("Patch Editor", theme=self.course.prompt_theme)
         self.archivist = Archivist("Archivist", theme=self.course.prompt_theme)
         
@@ -258,7 +259,10 @@ class Orchestrator:
             "per_agent_tokens": {},
             "patch_attempts": 0,
             "patch_attempts_log": [],
-            "failure_reasons": []
+            "failure_reasons": [],
+            "grounding_auditor_status": "passed",
+            "grounding_auditor_attempts": 0,
+            "grounding_auditor_blockers": []
         }
 
     def load_or_create_manifest(self) -> RunManifest:
@@ -403,6 +407,8 @@ class Orchestrator:
         self.generator.output_tokens = 0
         self.semantic_evaluator.input_tokens = 0
         self.semantic_evaluator.output_tokens = 0
+        self.grounding_auditor.input_tokens = 0
+        self.grounding_auditor.output_tokens = 0
         self.patch_editor.input_tokens = 0
         self.patch_editor.output_tokens = 0
         
@@ -417,6 +423,66 @@ class Orchestrator:
         self.telemetry["current_agent"] = "Content Generator"
         self.telemetry["active_iterations"] = 1
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+
+        # Resolve grounding context
+        from src.engine.grounding_resolver import resolve_grounding_context
+        curr_module_obj = None
+        curr_topic_obj = None
+        for m in getattr(self.course, "modules", []):
+            if m.module_title == module_title:
+                curr_module_obj = m
+                for t in m.topics:
+                    if t.topic_title == sub_title:
+                        curr_topic_obj = t
+                        break
+                break
+        
+        resolved_context = resolve_grounding_context(
+            self.course, 
+            curr_module_obj or ModuleStructure(module_title=module_title, module_context=module_context, topics=[]), 
+            curr_topic_obj or Topic(topic_title=sub_title, concept=content_context)
+        )
+        
+        # Format tool_stack
+        tool_stack_obj = getattr(self.course, "tool_stack", None)
+        if tool_stack_obj:
+            if isinstance(tool_stack_obj, dict):
+                tools_list = tool_stack_obj.get("tools", []) or []
+                tech_stack_list = tool_stack_obj.get("tech_stack", []) or []
+            else:
+                tools_list = getattr(tool_stack_obj, "tools", []) or []
+                tech_stack_list = getattr(tool_stack_obj, "tech_stack", []) or []
+        else:
+            tools_list = []
+            tech_stack_list = []
+            
+        tool_stack_str = (
+            f"Tools: {', '.join(tools_list) if tools_list else 'None'}\n"
+            f"Tech Stack: {', '.join(tech_stack_list) if tech_stack_list else 'None'}"
+        )
+        
+        # Format grounding_context
+        g_parts = []
+        c_chunks = resolved_context.get("course_chunks", [])
+        if c_chunks:
+            g_parts.append("Course Chunks:")
+            for chunk in c_chunks:
+                g_parts.append(f"- [{chunk['chunk_id']}]: {chunk['text']}")
+        m_chunks = resolved_context.get("module_chunks", [])
+        if m_chunks:
+            g_parts.append("Module Chunks:")
+            for chunk in m_chunks:
+                g_parts.append(f"- [{chunk['chunk_id']}]: {chunk['text']}")
+        t_chunks = resolved_context.get("topic_chunks", [])
+        if t_chunks:
+            g_parts.append("Topic Chunks:")
+            for chunk in t_chunks:
+                g_parts.append(f"- [{chunk['chunk_id']}]: {chunk['text']}")
+                
+        if not g_parts:
+            grounding_context_str = "Grounding Context: Empty"
+        else:
+            grounding_context_str = "\n".join(g_parts)
 
         log_event("Content Generator", f"Drafting submodule '{sub_title}'...")
 
@@ -437,6 +503,8 @@ class Orchestrator:
             core_idea_words=getattr(self, "core_idea_words", 100),
             implementation_words=getattr(self, "implementation_words", 150),
             why_it_matters_words=getattr(self, "why_it_matters_words", 50),
+            tool_stack=tool_stack_str,
+            grounding_context=grounding_context_str,
             **addon_kwargs
         )
         self.update_agent_tokens("content_generator", self.generator)
@@ -451,115 +519,185 @@ class Orchestrator:
         
         update_live_preview(self.session_dir, self.master_file, sub_title, draft, "Drafting")
         
-        # 2. Deterministic Validation -> Patch (Max 2 retries)
+        # Unified validation, audit, and semantic evaluation repair loop
         from src.validators.markdown_validator import validate_markdown_structure
         from src.validators.lesson_contract_validator import validate_lesson_contract
         from src.utils.patch_utils import apply_section_patch
+
+        deterministic_attempts = 0
+        grounding_attempts = 0
+        semantic_attempts = 0
         
-        det_attempts = 0
-        while det_attempts < 2:
+        while True:
+            # 1. Deterministic Validation
             self.telemetry["current_agent"] = "Deterministic Validator"
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            
             log_event("Deterministic Validator", "Checking document structure and contract constraints...")
             struct_res = validate_markdown_structure(draft)
             contract_res = validate_lesson_contract(draft, self.lesson_contract)
-            
             all_issues = struct_res.issues + contract_res.issues
             blockers = [i for i in all_issues if i.severity == "blocker"]
             
-            if not blockers:
-                log_event("Deterministic Validator", "Passed: No structural blockers found.")
-                break
-                
-            blocker = blockers[0]
-            # Find which section we need to target
-            heading_to_patch = blocker.section or (struct_res.detected_headings[0] if struct_res.detected_headings else "Introduction")
-            
-            log_event("Deterministic Validator", f"Failed: Blocker found in '{heading_to_patch}': {blocker.message}")
-            self.telemetry["patch_attempts"] += 1
-            self.telemetry["patch_attempts_log"].append(f"Deterministic | {heading_to_patch} | {blocker.message}")
-            self.telemetry["failure_reasons"].append(blocker.model_dump())
-            
-            self.telemetry["current_agent"] = "Patch Editor"
-            self.telemetry["active_iterations"] = 1 + det_attempts + 1
-            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            
-            log_event("Orchestrator", f"--- Submodule Attempt {self.telemetry['active_iterations']} ---")
-            log_event("Patch Editor", f"Attempting structural repair on '{heading_to_patch}' ({det_attempts + 1}/2)...")
-
-            try:
-                patch_result = self.patch_editor.edit_patch(
-                    draft=draft,
-                    feedback=blocker.message,
-                    heading=heading_to_patch,
-                    course_topic=self.course.course_context,
-                    submodule_title=sub_title,
-                    patch_mode="fix_structure",
-                    learner_level=getattr(self.course, "learner_level", "beginner")
-                )
-                self.telemetry["patch_mode"] = "fix_structure"
-                
-                if patch_result.operation == "no_safe_patch":
-                    log_event("Patch Editor", f"Declined: No safe patch available. {patch_result.reason}")
-                else:
-                    log_event("Patch Editor", f"Edited: Patch generated and spliced successfully.")
-                    previous_valid_draft = draft
+            if blockers:
+                if deterministic_attempts >= 2:
+                    log_event("Deterministic Validator", f"Failed: Final blockers still present after patches: {blockers[0].message}")
+                    break
                     
-                    if blocker.issue_type == "missing_section":
-                        # If the section is completely missing, append it rather than replace
-                        replacement = patch_result.replacement_markdown.strip()
-                        if not replacement.lower().startswith(f"### {heading_to_patch.lower()}"):
-                            replacement = f"### {heading_to_patch}\n\n{replacement}"
-                        candidate_draft = draft + "\n\n" + replacement
+                blocker = blockers[0]
+                heading_to_patch = blocker.section or (struct_res.detected_headings[0] if struct_res.detected_headings else "Introduction")
+                log_event("Deterministic Validator", f"Failed: Blocker found in '{heading_to_patch}': {blocker.message}")
+                
+                self.telemetry["patch_attempts"] += 1
+                self.telemetry["patch_attempts_log"].append(f"Deterministic | {heading_to_patch} | {blocker.message}")
+                self.telemetry["failure_reasons"].append(blocker.model_dump())
+                
+                self.telemetry["current_agent"] = "Patch Editor"
+                total_att = deterministic_attempts + grounding_attempts + semantic_attempts
+                self.telemetry["active_iterations"] = 1 + total_att + 1
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                log_event("Orchestrator", f"--- Submodule Repair Attempt {self.telemetry['active_iterations']} ---")
+                log_event("Patch Editor", f"Attempting structural repair on '{heading_to_patch}' ({deterministic_attempts + 1}/2)...")
+                
+                try:
+                    patch_result = self.patch_editor.edit_patch(
+                        draft=draft,
+                        feedback=blocker.message,
+                        heading=heading_to_patch,
+                        course_topic=self.course.course_context,
+                        submodule_title=sub_title,
+                        patch_mode="fix_structure",
+                        learner_level=getattr(self.course, "learner_level", "beginner")
+                    )
+                    self.telemetry["patch_mode"] = "fix_structure"
+                    
+                    if patch_result.operation == "no_safe_patch":
+                        log_event("Patch Editor", f"Declined: No safe patch available. {patch_result.reason}")
                     else:
-                        candidate_draft = apply_section_patch(draft, heading_to_patch, patch_result.replacement_markdown)
+                        log_event("Patch Editor", f"Edited: Patch generated and spliced successfully.")
+                        if blocker.issue_type == "missing_section":
+                            replacement = patch_result.replacement_markdown.strip()
+                            if not replacement.lower().startswith(f"### {heading_to_patch.lower()}"):
+                                replacement = f"### {heading_to_patch}\n\n{replacement}"
+                            candidate_draft = draft + "\n\n" + replacement
+                        else:
+                            candidate_draft = apply_section_patch(draft, heading_to_patch, patch_result.replacement_markdown)
+                            
+                        candidate_draft = normalize_draft(candidate_draft, sub_title, req_headings)
+                        candidate_draft = normalize_step_headings(candidate_draft, known_sections)
                         
-                    candidate_draft = normalize_draft(candidate_draft, sub_title, req_headings)
-                    candidate_draft = normalize_step_headings(candidate_draft, known_sections)
-                    
-                    # Transactional verification: ensure patch didn't break markdown integrity
-                    temp_res = validate_markdown_structure(candidate_draft)
-                    temp_blockers = [i for i in temp_res.issues if i.severity == "blocker"]
-                    if temp_blockers:
-                        log_event("Deterministic Validator", f"Patch verification failed! New blocker introduced: '{temp_blockers[0].issue_type}'. Orchestrator reverting patch.")
-                    else:
-                        draft = candidate_draft
-                        update_live_preview(self.session_dir, self.master_file, sub_title, draft, f"Repairing ({det_attempts + 1}/2)")
-            except Exception as e:
-                log_event("Patch Editor", f"Execution failed: {str(e)}")
+                        temp_res = validate_markdown_structure(candidate_draft)
+                        temp_blockers = [i for i in temp_res.issues if i.severity == "blocker"]
+                        if temp_blockers:
+                            log_event("Deterministic Validator", f"Patch verification failed! Reverting patch.")
+                        else:
+                            draft = candidate_draft
+                            update_live_preview(self.session_dir, self.master_file, sub_title, draft, f"Repairing ({deterministic_attempts + 1}/2)")
+                except Exception as e:
+                    log_event("Patch Editor", f"Execution failed: {str(e)}")
                 
-            self.update_agent_tokens("patch_editor", self.patch_editor)
+                self.update_agent_tokens("patch_editor", self.patch_editor)
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                deterministic_attempts += 1
+                continue
+                
+            # 2. Grounding Faithfulness Audit
+            self.telemetry["current_agent"] = "Grounding Faithfulness Auditor"
+            self.telemetry["grounding_auditor_attempts"] += 1
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            det_attempts += 1
+            log_event("Grounding Faithfulness Auditor", "Auditing lesson draft grounding faithfulness...")
             
-        # Re-verify deterministic validation
-        log_event("Deterministic Validator", "Performing final structural verification...")
-        struct_res = validate_markdown_structure(draft)
-        contract_res = validate_lesson_contract(draft, self.lesson_contract)
-        all_issues = struct_res.issues + contract_res.issues
-        blockers = [i for i in all_issues if i.severity == "blocker"]
-        
-        if blockers:
-            log_event("Deterministic Validator", f"Failed: Final blockers still present after patches: {blockers[0].message}")
-            self.telemetry["current_agent"] = "None"
-            self.telemetry["active_iterations"] = 0
-            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            return "failed_blocker", draft
-        
-        log_event("Deterministic Validator", "Passed: No structural blockers found in final verification.")
+            tool_stack_dict = {"tools": tools_list, "tech_stack": tech_stack_list}
+            audit_res = self.grounding_auditor.audit_grounding(
+                content=draft,
+                course_context=self.course.course_context,
+                module_context=module_context,
+                topic_context=content_context,
+                tool_stack=tool_stack_dict,
+                grounding_context=resolved_context
+            )
+            self.update_agent_tokens("grounding_auditor", self.grounding_auditor)
             
-        # 3. Semantic Evaluator -> Patch (Max 2 retries)
-        sem_attempts = 0
-        while sem_attempts < 2:
-            
+            if audit_res.get("status") != "APPROVED":
+                if grounding_attempts >= 2:
+                    log_event("Grounding Faithfulness Auditor", f"Failed: Blocker still present after 2 attempts.")
+                    break
+                    
+                self.telemetry["grounding_auditor_status"] = "failed"
+                blockers_list = audit_res.get("blockers", [])
+                self.telemetry["grounding_auditor_blockers"] = [b.get("issue", "") for b in blockers_list]
+                
+                if blockers_list:
+                    blocker = blockers_list[0]
+                    heading_to_patch = blocker.get("section") or (struct_res.detected_headings[0] if struct_res.detected_headings else "Introduction")
+                    feedback_msg = (
+                        f"Grounding Faithfulness Auditor found unsupported claims:\n"
+                        f"- Section: {heading_to_patch}\n"
+                        f"  Issue: {blocker.get('issue')}\n"
+                        f"  Suggested fix: {blocker.get('suggested_fix')}"
+                    )
+                else:
+                    heading_to_patch = struct_res.detected_headings[0] if struct_res.detected_headings else "Introduction"
+                    feedback_msg = "Grounding Faithfulness Auditor failed: Grounding check did not approve draft."
+                
+                log_event("Grounding Faithfulness Auditor", f"Failed: Blocker found in '{heading_to_patch}': {feedback_msg}")
+                self.telemetry["patch_attempts"] += 1
+                self.telemetry["patch_attempts_log"].append(f"Grounding | {heading_to_patch} | {feedback_msg}")
+                
+                self.telemetry["current_agent"] = "Patch Editor"
+                total_att = deterministic_attempts + grounding_attempts + semantic_attempts
+                self.telemetry["active_iterations"] = 1 + total_att + 1
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                log_event("Orchestrator", f"--- Submodule Repair Attempt {self.telemetry['active_iterations']} ---")
+                log_event("Patch Editor", f"Attempting grounding repair on '{heading_to_patch}' ({grounding_attempts + 1}/2)...")
+                
+                try:
+                    patch_result = self.patch_editor.edit_patch(
+                        draft=draft,
+                        feedback=feedback_msg,
+                        heading=heading_to_patch,
+                        course_topic=self.course.course_context,
+                        submodule_title=sub_title,
+                        patch_mode="fix_structure",
+                        learner_level=getattr(self.course, "learner_level", "beginner")
+                    )
+                    self.telemetry["patch_mode"] = "fix_structure"
+                    
+                    if patch_result.operation == "no_safe_patch":
+                        log_event("Patch Editor", f"Declined: No safe patch available. {patch_result.reason}")
+                    else:
+                        log_event("Patch Editor", f"Edited: Patch generated and spliced successfully.")
+                        candidate_draft = apply_section_patch(draft, heading_to_patch, patch_result.replacement_markdown)
+                        candidate_draft = normalize_draft(candidate_draft, sub_title, req_headings)
+                        candidate_draft = normalize_step_headings(candidate_draft, known_sections)
+                        
+                        temp_res = validate_markdown_structure(candidate_draft)
+                        temp_blockers = [i for i in temp_res.issues if i.severity == "blocker"]
+                        if temp_blockers:
+                            log_event("Deterministic Validator", f"Patch verification failed! Reverting patch.")
+                        else:
+                            draft = candidate_draft
+                            update_live_preview(self.session_dir, self.master_file, sub_title, draft, f"Grounding Repair ({grounding_attempts + 1}/2)")
+                except Exception as e:
+                    log_event("Patch Editor", f"Execution failed: {str(e)}")
+                    
+                self.update_agent_tokens("patch_editor", self.patch_editor)
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                grounding_attempts += 1
+                continue
+            else:
+                self.telemetry["grounding_auditor_status"] = "passed"
+                self.telemetry["grounding_auditor_blockers"] = []
+                log_event("Grounding Faithfulness Auditor", "Passed: Grounding audit approved.")
+                
+            # 3. Semantic Evaluation
             self.telemetry["current_agent"] = "Semantic Evaluator"
-            self.telemetry["active_iterations"] = 1 + det_attempts + sem_attempts + 1
+            total_att = deterministic_attempts + grounding_attempts + semantic_attempts
+            self.telemetry["active_iterations"] = 1 + total_att + 1
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-
-            log_event("Orchestrator", f"--- Submodule Attempt {self.telemetry['active_iterations']} ---")
             log_event("Semantic Evaluator", "Evaluating pedagogical flow and tone...")
-
+            
             eval_res = self.semantic_evaluator.evaluate(
                 draft=draft,
                 lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
@@ -576,79 +714,80 @@ class Orchestrator:
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
             
             blockers = [i for i in eval_res.issues if i.severity == "blocker"]
-            if not blockers:
-                log_event("Semantic Evaluator", "Passed: No critical semantic blockers.")
-                break
-                
-            blocker = blockers[0]
-            heading_to_patch = blocker.section or (eval_res.detected_headings[0] if eval_res.detected_headings else "Introduction")
-            
-            log_event("Semantic Evaluator", f"Failed: Blocker found in '{heading_to_patch}': {blocker.message}")
-            self.telemetry["patch_attempts"] += 1
-            self.telemetry["patch_attempts_log"].append(f"Semantic | {heading_to_patch} | {blocker.message}")
-            self.telemetry["failure_reasons"].append(blocker.model_dump())
-            
-            self.telemetry["current_agent"] = "Patch Editor"
-            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            
-            log_event("Patch Editor", f"Attempting semantic repair on '{heading_to_patch}' ({sem_attempts + 1}/2)...")
-
-            # Determine semantic patch mode
-            msg = blocker.message.lower()
-            if any(k in msg for k in ["jargon", "too advanced", "complex", "formula", "abstract"]):
-                p_mode = "simplify_for_beginner"
-            elif any(k in msg for k in ["basic", "shallow", "practical", "trade-off"]) and "advanced" not in msg:
-                p_mode = "practicalize_for_intermediate"
-            elif any(k in msg for k in ["basic", "shallow", "toy", "internals", "architecture"]):
-                p_mode = "deepen_for_advanced"
-            elif any(k in msg for k in ["code", "example", "production"]):
-                p_mode = "adjust_code_progression"
-            else:
-                p_mode = "fix_structure"
-
-            try:
-                patch_result = self.patch_editor.edit_patch(
-                    draft=draft,
-                    feedback=blocker.message,
-                    heading=heading_to_patch,
-                    course_topic=self.course.course_context,
-                    submodule_title=sub_title,
-                    patch_mode=p_mode,
-                    learner_level=getattr(self.course, "learner_level", "beginner"),
-                    **addon_kwargs
-                )
-                self.telemetry["patch_mode"] = p_mode
-                
-                if patch_result.operation == "no_safe_patch":
-                    log_event("Patch Editor", f"Declined: No safe patch available. {patch_result.reason}")
-                else:
-                    log_event("Patch Editor", f"Edited: Patch generated and spliced successfully.")
-                    previous_valid_draft = draft
-                    candidate_draft = apply_section_patch(draft, heading_to_patch, patch_result.replacement_markdown)
-                    candidate_draft = normalize_draft(candidate_draft, sub_title, req_headings)
-                    candidate_draft = normalize_step_headings(candidate_draft, known_sections)
+            if blockers:
+                if semantic_attempts >= 2:
+                    log_event("Semantic Evaluator", f"Failed: Blocker still present after 2 attempts.")
+                    break
                     
-                    # Transactional verification: ensure patch didn't break markdown integrity
-                    temp_res = validate_markdown_structure(candidate_draft)
-                    temp_blockers = [i for i in temp_res.issues if i.severity == "blocker"]
-                    if temp_blockers:
-                        log_event("Deterministic Validator", f"Patch verification failed! New blocker introduced: '{temp_blockers[0].issue_type}'. Orchestrator reverting patch.")
-                    else:
-                        draft = candidate_draft
-                        update_live_preview(self.session_dir, self.master_file, sub_title, draft, f"Refining ({sem_attempts + 1}/2)")
-            except Exception as e:
-                log_event("Patch Editor", f"Execution failed: {str(e)}")
+                blocker = blockers[0]
+                heading_to_patch = blocker.section or (eval_res.detected_headings[0] if eval_res.detected_headings else "Introduction")
+                log_event("Semantic Evaluator", f"Failed: Blocker found in '{heading_to_patch}': {blocker.message}")
                 
-            self.update_agent_tokens("patch_editor", self.patch_editor)
-            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-            sem_attempts += 1
-            
-        # Final evaluation
+                self.telemetry["patch_attempts"] += 1
+                self.telemetry["patch_attempts_log"].append(f"Semantic | {heading_to_patch} | {blocker.message}")
+                self.telemetry["failure_reasons"].append(blocker.model_dump())
+                
+                self.telemetry["current_agent"] = "Patch Editor"
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                log_event("Patch Editor", f"Attempting semantic repair on '{heading_to_patch}' ({semantic_attempts + 1}/2)...")
+                
+                msg = blocker.message.lower()
+                if any(k in msg for k in ["jargon", "too advanced", "complex", "formula", "abstract"]):
+                    p_mode = "simplify_for_beginner"
+                elif any(k in msg for k in ["basic", "shallow", "practical", "trade-off"]) and "advanced" not in msg:
+                    p_mode = "practicalize_for_intermediate"
+                elif any(k in msg for k in ["basic", "shallow", "toy", "internals", "architecture"]):
+                    p_mode = "deepen_for_advanced"
+                elif any(k in msg for k in ["code", "example", "production"]):
+                    p_mode = "adjust_code_progression"
+                else:
+                    p_mode = "fix_structure"
+                    
+                try:
+                    patch_result = self.patch_editor.edit_patch(
+                        draft=draft,
+                        feedback=blocker.message,
+                        heading=heading_to_patch,
+                        course_topic=self.course.course_context,
+                        submodule_title=sub_title,
+                        patch_mode=p_mode,
+                        learner_level=getattr(self.course, "learner_level", "beginner"),
+                        **addon_kwargs
+                    )
+                    self.telemetry["patch_mode"] = p_mode
+                    
+                    if patch_result.operation == "no_safe_patch":
+                        log_event("Patch Editor", f"Declined: No safe patch available. {patch_result.reason}")
+                    else:
+                        log_event("Patch Editor", f"Edited: Patch generated and spliced successfully.")
+                        candidate_draft = apply_section_patch(draft, heading_to_patch, patch_result.replacement_markdown)
+                        candidate_draft = normalize_draft(candidate_draft, sub_title, req_headings)
+                        candidate_draft = normalize_step_headings(candidate_draft, known_sections)
+                        
+                        temp_res = validate_markdown_structure(candidate_draft)
+                        temp_blockers = [i for i in temp_res.issues if i.severity == "blocker"]
+                        if temp_blockers:
+                            log_event("Deterministic Validator", f"Patch verification failed! Reverting patch.")
+                        else:
+                            draft = candidate_draft
+                            update_live_preview(self.session_dir, self.master_file, sub_title, draft, f"Refining ({semantic_attempts + 1}/2)")
+                except Exception as e:
+                    log_event("Patch Editor", f"Execution failed: {str(e)}")
+                    
+                self.update_agent_tokens("patch_editor", self.patch_editor)
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                semantic_attempts += 1
+                continue
+            else:
+                log_event("Semantic Evaluator", "Passed: Semantic evaluation approved.")
+                
+            break
+
+        # Final evaluation to check for warnings
         self.telemetry["current_agent"] = "Semantic Evaluator"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-        
         log_event("Semantic Evaluator", "Performing final semantic evaluation...")
-
+        
         final_eval = self.semantic_evaluator.evaluate(
             draft=draft,
             lesson_contract=json.dumps(self.lesson_contract.model_dump(), indent=2),
@@ -981,6 +1120,7 @@ def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str
         "guide", "debugging", "paste", "snippet", "comment", "anti-pattern"
     ]
 
+    context_lines = []
     for idx, line in enumerate(lines):
         line_stripped = line.strip()
         line_lower = line.lower()
@@ -999,47 +1139,17 @@ def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str
         reason = None
         severity = "allow"
         
-        if todo_standalone.match(line_stripped):
-            matched_term = line_stripped
-            rule_id = "unresolved_standalone_todo"
-            reason = "Standalone unresolved TODO marker"
+        from src.utils.placeholder_classifier import classify_placeholder
+        res_class = classify_placeholder(line, context_lines)
+        if res_class.get("is_blocked"):
+            matched_term = res_class["matched_term"]
+            rule_id = res_class["rule_id"]
+            reason = res_class["reason"]
             severity = "blocker"
-        elif "todo:" in line_lower and len(line_stripped) < 150:
-            is_instructional = any(k in line_lower for k in instructional_keywords)
-            if is_instructional:
-                severity = "allow"
-            else:
-                matched_term = line_stripped
-                rule_id = "unresolved_todo_directive"
-                reason = "Unresolved TODO directive in final content"
-                severity = "blocker"
-        elif tbd_standalone.match(line_stripped):
-            matched_term = line_stripped
-            rule_id = "unresolved_tbd"
-            reason = "Standalone unresolved TBD marker"
-            severity = "blocker"
-        elif bracket_placeholder.search(line_stripped):
-            matched_term = bracket_placeholder.search(line_stripped).group(0)
-            rule_id = "unresolved_bracket_placeholder"
-            reason = "Unresolved bracket placeholder"
-            severity = "blocker"
-        else:
-            for p in generic_placeholders:
-                if p in line_lower:
-                    matched_term = p
-                    rule_id = "mock_leakage"
-                    reason = f"Mocked text leakage '{p}'"
-                    severity = "blocker"
-                    break
             
-            if severity == "allow":
-                for phrase in missing_content_phrases:
-                    if phrase in line_lower and len(line_stripped) < 100:
-                        matched_term = phrase
-                        rule_id = "missing_content_placeholder"
-                        reason = f"Unresolved placeholder phrase '{phrase}'"
-                        severity = "blocker"
-                        break
+        context_lines.append(line)
+        if len(context_lines) > 8:
+            context_lines.pop(0)
                         
         if severity == "blocker":
             if in_code_block and is_bad_example_section:

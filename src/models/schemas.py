@@ -6,6 +6,10 @@ class Submodule(BaseModel):
     title: str
     content_context: str
 
+class ToolStack(BaseModel):
+    tools: List[str] = Field(default_factory=list)
+    tech_stack: List[str] = Field(default_factory=list)
+
 class Module(BaseModel):
     title: str
     module_context: str
@@ -104,6 +108,9 @@ class TelemetryData(BaseModel):
     level_alignment_blockers: List[str] = Field(default_factory=list)
     mock_content_guard_status: str = "passed"
     export_contamination_status: str = "clean"
+    grounding_auditor_status: str = "passed"
+    grounding_auditor_attempts: int = 0
+    grounding_auditor_blockers: List[str] = Field(default_factory=list)
     run_manifest_match_status: str = "matched"
 
 class PatchResult(BaseModel):
@@ -165,6 +172,7 @@ class Topic(BaseModel):
     expert_heuristic: str = ""
     reference_guides: Optional[List[str]] = None
     expert_story: Optional[str] = None
+    topic_material_ids: List[str] = Field(default_factory=list)
 
 class ModuleStructure(BaseModel):
     module_title: str
@@ -172,6 +180,7 @@ class ModuleStructure(BaseModel):
     learning_outcomes: List[str] = Field(default_factory=list)
     module_constraints: List[str] = Field(default_factory=list)
     topics: List[Topic] = Field(default_factory=list)
+    module_material_ids: List[str] = Field(default_factory=list)
 
 class StudentPersona(BaseModel):
     name: str
@@ -189,6 +198,9 @@ class CourseStructure(BaseModel):
     code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
     lesson_contract: Optional[LessonContract] = None
+    tool_stack: Optional[ToolStack] = None
+    course_material_ids: List[str] = Field(default_factory=list)
+    material_bank: Dict[str, str] = Field(default_factory=dict)
 
 def normalize_course_input(payload: dict) -> CourseStructure:
     if not isinstance(payload, dict):
@@ -232,13 +244,15 @@ def normalize_course_input(payload: dict) -> CourseStructure:
                  
             topics_list.append(Topic(
                 topic_title=sub["title"],
-                concept=sub["content_context"]
+                concept=sub["content_context"],
+                topic_material_ids=sub.get("topic_material_ids", [])
             ))
              
         modules_list.append(ModuleStructure(
             module_title=mod["title"],
             module_context=mod["module_context"],
-            topics=topics_list
+            topics=topics_list,
+            module_material_ids=mod.get("module_material_ids", [])
         ))
         
     return CourseStructure(
@@ -251,5 +265,8 @@ def normalize_course_input(payload: dict) -> CourseStructure:
         learner_level=payload.get("learner_level", "beginner"),
         code_example_style=payload.get("code_example_style", "progressive_production"),
         explanation_depth=payload.get("explanation_depth", "balanced"),
-        lesson_contract=payload.get("lesson_contract")
+        lesson_contract=payload.get("lesson_contract"),
+        tool_stack=payload.get("tool_stack"),
+        course_material_ids=payload.get("course_material_ids", []),
+        material_bank=payload.get("material_bank", {})
     )

@@ -16,6 +16,16 @@ Curriculum context to follow strictly:
 
 {learning_context_block}
 
+### ENVIRONMENT & GROUNDING MATERIALS
+{tool_stack}
+
+{grounding_context}
+
+### GROUNDING INSTRUCTIONS
+Use the course JSON as the teaching target. Use grounding_context as supporting source material. Prefer topic chunks for topic-specific detail, module chunks for block-level continuity, and course chunks for overall alignment. Do not repeat the same chunk idea multiple times. If grounding_context is empty, generate from the course JSON as usual.
+
+Do not invent a separate tools section unless the active lesson format requires it. Mention tools/tech stack only when naturally relevant to the explanation or examples.
+
 ### PREVIOUSLY COVERED (DO NOT REPEAT)
 The following concepts have already been covered in prior chapters. Do not repeat them here unless absolutely necessary for context.
 ```
@@ -47,6 +57,7 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Do NOT output any top-level (#) or second-level (##) headings.
 - Do NOT output any title-based '###' headings matching the topic title.
 - Rely ONLY on the provided CONTEXT for the factual direction of the lesson. Do not hallucinate external topics.
+- If you include learner-facing fill-in slots, place them only inside clearly labeled prompt templates, diagnostic templates, learner templates, or fill-in examples. Use uppercase bracketed slots such as [EXPECTED BEHAVIOR] or [PASTE ERROR MESSAGE HERE]. Never leave authoring placeholders such as [TODO], [Insert content here], or [Add example later].
 
 ## 1. Lesson Contract and Structure
 
