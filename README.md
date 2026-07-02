@@ -9,6 +9,8 @@ Using a strict **Deterministic Validation Flow**, the engine replaces unpredicta
 * **RPM & TPM Throttling Controls:** Real-time UI controls to inject specific RPM (Requests Per Minute) and TPM (Tokens Per Minute) limits into the backend engine, ensuring graceful handling of Gemini Free Tier rate limits without crashing.
 * **Grounding Faithfulness Auditor:** An integrated AI auditor checking drafts against curriculum source chunks (course, module, topic, and web chunks) to prevent hallucinations, enforce tool-stack boundaries, and block unsupported API claims.
 * **Context-Aware Placeholder Classification:** Smart, context-aware parser logic mapping validators and export guards to allow intentional learner-facing template slots (e.g. `[EXPECTED BEHAVIOR]`) inside labeled template examples while strictly blocking authoring markers (e.g. `[TODO]`, `[Insert code here]`).
+* **Strict Schema & Nullable Fields Validation:** Enforces rigid input contracts (`extra="forbid"`) to reject unexpected configuration parameters, while gracefully accepting both `null` and empty values (`""`, `[]`) for all optional course fields and grounding/materials arrays.
+* **Submodule Telemetry Matrix:** Real-time validation matrix tracking attempt outcomes (`1`, `2`, `3`, or `F`) per submodule across Deterministic, Grounding, and Semantic validation pipelines, fully persisted on resume and rendered dynamically on the frontend.
 * **Structured Lesson Themes (`otto2_structured`):** Supports swappable prompt layout styles. The structured theme automatically renders mapped sections (`Core Idea`, `Lesson Breakdown`, `Practical Walkthrough`, `Edge Cases`, `Common Mistakes`, `Action Items`, `Why It Matters`) while treating constraints and expert paths strictly as internal-only generation guidance.
 * **Decoupled Architecture:** 
   * **Frontend:** Lightning-fast React SPA running on Vite.
@@ -123,6 +125,10 @@ Here is a comprehensive sample `course_input.json` using the modern `CourseStruc
       "context": "A software engineer transitioning into AI, familiar with Python but new to LLMs."
     }
   ],
+  "tool_stack": {
+    "tools": ["LangChain", "Gemini API"],
+    "tech_stack": ["Python", "FastAPI"]
+  },
   "modules": [
     {
       "module_title": "Module 1: Agentic Patterns",
@@ -167,7 +173,7 @@ Here is a comprehensive sample `course_input.json` using the modern `CourseStruc
     - `topic_title` and `concept`
 
 **Optional Power Features:**
-- **Course Level:** `duration_weeks`, `student_personas`, `lesson_contract`, and stylistic flags (`prompt_theme`, `quality_profile`, `learner_level`, `code_example_style`, `explanation_depth`). Note: These can also be overridden via the UI Dashboard.
+- **Course Level:** `duration_weeks`, `student_personas`, `lesson_contract`, `tool_stack`, and stylistic flags (`prompt_theme`, `quality_profile`, `learner_level`, `code_example_style`, `explanation_depth`). Note: These can also be overridden via the UI Dashboard.
 - **Module Level:** `learning_outcomes`, `module_constraints`.
 - **Topic Level:** `breakdown`, `constraints`, `edge_cases`, `action_items`, `common_mistakes`, `evaluation_path`, `expert_heuristic`, `expert_story`, and `reference_guides`.
 

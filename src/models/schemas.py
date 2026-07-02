@@ -1,7 +1,9 @@
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import List, Optional, Any, Dict, Literal
 
+# Legacy models must NOT use extra="forbid" and must NOT have blank-text validators
+# to preserve 100% backward compatibility with legacy payloads and tests.
 class Submodule(BaseModel):
     title: str
     content_context: str
@@ -20,6 +22,9 @@ class QualityProfile(str, Enum):
     STANDARD = "standard"
     TEXTBOOK = "textbook"
 
+# API response and telemetry models must inherit from BaseModel (not StrictBaseModel)
+# to prevent Pydantic from generating "additionalProperties: False" in their JSON schemas,
+# which the Gemini API rejects with a 400 INVALID_ARGUMENT error.
 class ValidationIssue(BaseModel):
     severity: str  # e.g., "blocker", "warning", "suggestion"
     issue_type: str
@@ -69,10 +74,12 @@ class CourseInput(BaseModel):
     code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
 
+
+# Strict base model for modern/new models
+class StrictBaseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
 class TelemetryData(BaseModel):
-    """
-    Standardized schema for tracking agent run status and usage.
-    """
     status: str
     progress_percent: int
     current_agent: str
@@ -90,28 +97,12 @@ class TelemetryData(BaseModel):
     passed_3rd_iteration: int = 0
     failed_max_iterations: int = 0
     run_history: List[Any] = Field(default_factory=list)
-    
-    # Extended fields for refactored optimized pipeline
     per_agent_tokens: Dict[str, int] = Field(default_factory=dict)
     patch_attempts: int = 0
     patch_attempts_log: List[str] = Field(default_factory=list)
     failure_reasons: List[str] = Field(default_factory=list)
-
-    # Learner level and guards telemetry
-    learner_level: str = "beginner"
-    code_example_style: str = "progressive_production"
-    explanation_depth: str = "balanced"
-    quality_profile: str = "standard"
-    lesson_contract: str = "standard_lesson"
-    level_alignment_status: str = "approved"
-    level_alignment_warnings: List[str] = Field(default_factory=list)
-    level_alignment_blockers: List[str] = Field(default_factory=list)
-    mock_content_guard_status: str = "passed"
-    export_contamination_status: str = "clean"
-    grounding_auditor_status: str = "passed"
-    grounding_auditor_attempts: int = 0
-    grounding_auditor_blockers: List[str] = Field(default_factory=list)
-    run_manifest_match_status: str = "matched"
+    course_structure: List[Dict[str, Any]] = Field(default_factory=list)
+    submodule_telemetry: Dict[str, Dict[str, Dict[str, str]]] = Field(default_factory=dict)
 
 class PatchResult(BaseModel):
     operation: Literal["replace_section", "no_safe_patch"]
@@ -140,7 +131,7 @@ class ArchivistResponse(BaseModel):
 
 class RunManifest(BaseModel):
     session_id: Optional[str] = None
-    course_id: Optional[str] = None  # Backwards compatibility
+    course_id: Optional[str] = None
     course_name: Optional[str] = None
     topic: str
     duration_weeks: Optional[int] = None
@@ -160,47 +151,135 @@ class RunManifest(BaseModel):
     per_agent_tokens: Optional[Dict[str, int]] = None
     completed_submodules: List[str] = Field(default_factory=list)
 
-class Topic(BaseModel):
+
+# Modern models for Course Structure configuration
+class Topic(StrictBaseModel):
+    # Required fields
     topic_title: str
     concept: str
-    breakdown: str = ""
-    constraints: str = ""
-    edge_cases: str = ""
+
+    # Optional fields (can be missing, null, or contain value)
+    breakdown: Optional[str] = ""
+    constraints: Optional[str] = ""
+    edge_cases: Optional[str] = ""
+    evaluation_path: Optional[str] = ""
+    expert_heuristic: Optional[str] = ""
+    expert_story: Optional[str] = None
+    inference_rationale: Optional[str] = None
+    inferred: Optional[bool] = None
+
+    # Optional list fields
     action_items: List[str] = Field(default_factory=list)
     common_mistakes: List[str] = Field(default_factory=list)
-    evaluation_path: str = ""
-    expert_heuristic: str = ""
     reference_guides: Optional[List[str]] = None
-    expert_story: Optional[str] = None
     topic_material_ids: List[str] = Field(default_factory=list)
 
-class ModuleStructure(BaseModel):
+    @field_validator("topic_title", "concept")
+    @classmethod
+    def required_text_must_not_be_blank(cls, value: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValueError("Required text fields must not be empty.")
+        return value
+
+    @field_validator("action_items", "common_mistakes", "topic_material_ids", mode="before")
+    @classmethod
+    def default_none_to_list(cls, v):
+        return [] if v is None else v
+
+    @field_validator("breakdown", "constraints", "edge_cases", "evaluation_path", "expert_heuristic", mode="before")
+    @classmethod
+    def default_none_to_empty_str(cls, v):
+        return "" if v is None else v
+
+class ModuleStructure(StrictBaseModel):
+    # Required fields
     module_title: str
     module_context: str
+    topics: List[Topic]  # Required but can be empty list
+
+    # Optional fields
     learning_outcomes: List[str] = Field(default_factory=list)
     module_constraints: List[str] = Field(default_factory=list)
-    topics: List[Topic] = Field(default_factory=list)
     module_material_ids: List[str] = Field(default_factory=list)
 
-class StudentPersona(BaseModel):
+    @property
+    def submodules(self) -> List[Topic]:
+        return self.topics
+
+    @field_validator("module_title", "module_context")
+    @classmethod
+    def required_text_must_not_be_blank(cls, value: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValueError("Required text fields must not be empty.")
+        return value
+
+    @field_validator("learning_outcomes", "module_constraints", "module_material_ids", mode="before")
+    @classmethod
+    def default_none_to_list(cls, v):
+        return [] if v is None else v
+
+class StudentPersona(StrictBaseModel):
     name: str
     context: str
 
-class CourseStructure(BaseModel):
+    @field_validator("name", "context")
+    @classmethod
+    def required_text_must_not_be_blank(cls, value: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValueError("Required text fields must not be empty.")
+        return value
+
+class CourseStructure(StrictBaseModel):
+    # Required fields
     course_title: str
     course_context: str
+    modules: List[ModuleStructure]  # Required but can be empty list
+
+    # Optional course-level fields
     duration_weeks: Optional[int] = None
-    student_personas: List[StudentPersona] = Field(default_factory=list)
-    modules: List[ModuleStructure] = Field(default_factory=list)
     prompt_theme: str = Field("default", pattern=r"^[a-zA-Z0-9_-]+$")
     quality_profile: QualityProfile = QualityProfile.STANDARD
     learner_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
     code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
+    student_personas: List[StudentPersona] = Field(default_factory=list)
     lesson_contract: Optional[LessonContract] = None
+
+    # Optional grounding/material fields
     tool_stack: Optional[ToolStack] = None
     course_material_ids: List[str] = Field(default_factory=list)
     material_bank: Dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("course_title", "course_context")
+    @classmethod
+    def required_text_must_not_be_blank(cls, value: str) -> str:
+        if value is None or not str(value).strip():
+            raise ValueError("Required text fields must not be empty.")
+        return value
+
+    @field_validator("student_personas", "course_material_ids", mode="before")
+    @classmethod
+    def default_none_to_list(cls, v):
+        return [] if v is None else v
+
+    @field_validator("material_bank", mode="before")
+    @classmethod
+    def default_none_to_dict(cls, v):
+        return {} if v is None else v
+
+    @field_validator("prompt_theme", "quality_profile", "learner_level", "code_example_style", "explanation_depth", mode="before")
+    @classmethod
+    def default_none_to_str_defaults(cls, v, info):
+        if v is None:
+            defaults = {
+                "prompt_theme": "default",
+                "quality_profile": QualityProfile.STANDARD,
+                "learner_level": "beginner",
+                "code_example_style": "progressive_production",
+                "explanation_depth": "balanced"
+            }
+            return defaults.get(info.field_name)
+        return v
 
 def normalize_course_input(payload: dict) -> CourseStructure:
     if not isinstance(payload, dict):

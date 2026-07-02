@@ -264,6 +264,37 @@ class Orchestrator:
             "grounding_auditor_attempts": 0,
             "grounding_auditor_blockers": []
         }
+        
+        # Populate course structure
+        self.telemetry["course_structure"] = [
+            {
+                "module_title": mod.module_title,
+                "submodules": [t.topic_title for t in mod.topics]
+            }
+            for mod in self.course.modules
+        ] if hasattr(self.course, "modules") and self.course.modules else []
+        self.telemetry["submodule_telemetry"] = {}
+        
+        # Load from session directory telemetry.json if resuming
+        if self.run_type == "resume_existing_run" and self.session_dir:
+            session_tel_path = self.session_dir / "telemetry.json"
+            if session_tel_path.exists():
+                try:
+                    with open(session_tel_path, "r", encoding="utf-8") as f:
+                        session_tel = json.load(f)
+                    if "course_structure" in session_tel:
+                        self.telemetry["course_structure"] = session_tel["course_structure"]
+                    if "submodule_telemetry" in session_tel:
+                        self.telemetry["submodule_telemetry"] = session_tel["submodule_telemetry"]
+                except Exception:
+                    pass
+
+    def update_submodule_telemetry(self, module: str, sub: str, agent: str, val: Any):
+        st = self.telemetry.setdefault("submodule_telemetry", {})
+        mod_dict = st.setdefault(module, {})
+        sub_dict = mod_dict.setdefault(sub, {})
+        sub_dict[agent] = str(val)
+
 
     def load_or_create_manifest(self) -> RunManifest:
         manifest_path = self.session_dir / "run_manifest.json"
@@ -412,6 +443,13 @@ class Orchestrator:
         self.patch_editor.input_tokens = 0
         self.patch_editor.output_tokens = 0
         
+        # Initialize submodule telemetry status to pending/running
+        self.update_submodule_telemetry(module_title, sub_title, "deterministic", "-")
+        self.update_submodule_telemetry(module_title, sub_title, "grounding", "-")
+        self.update_submodule_telemetry(module_title, sub_title, "semantic", "-")
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+
+        
         # Bounded learned rules (cap at 10)
         learned_rules = self.generator._get_learning_context()
         rules_list = [r.strip() for r in learned_rules.splitlines() if r.strip()]
@@ -541,6 +579,8 @@ class Orchestrator:
             if blockers:
                 if deterministic_attempts >= 2:
                     log_event("Deterministic Validator", f"Failed: Final blockers still present after patches: {blockers[0].message}")
+                    self.update_submodule_telemetry(module_title, sub_title, "deterministic", "F")
+                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                     break
                     
                 blocker = blockers[0]
@@ -602,6 +642,7 @@ class Orchestrator:
                 continue
                 
             # 2. Grounding Faithfulness Audit
+            self.update_submodule_telemetry(module_title, sub_title, "deterministic", str(deterministic_attempts + 1))
             self.telemetry["current_agent"] = "Grounding Faithfulness Auditor"
             self.telemetry["grounding_auditor_attempts"] += 1
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
@@ -621,6 +662,8 @@ class Orchestrator:
             if audit_res.get("status") != "APPROVED":
                 if grounding_attempts >= 2:
                     log_event("Grounding Faithfulness Auditor", f"Failed: Blocker still present after 2 attempts.")
+                    self.update_submodule_telemetry(module_title, sub_title, "grounding", "F")
+                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                     break
                     
                 self.telemetry["grounding_auditor_status"] = "failed"
@@ -689,6 +732,7 @@ class Orchestrator:
             else:
                 self.telemetry["grounding_auditor_status"] = "passed"
                 self.telemetry["grounding_auditor_blockers"] = []
+                self.update_submodule_telemetry(module_title, sub_title, "grounding", str(grounding_attempts + 1))
                 log_event("Grounding Faithfulness Auditor", "Passed: Grounding audit approved.")
                 
             # 3. Semantic Evaluation
@@ -717,6 +761,8 @@ class Orchestrator:
             if blockers:
                 if semantic_attempts >= 2:
                     log_event("Semantic Evaluator", f"Failed: Blocker still present after 2 attempts.")
+                    self.update_submodule_telemetry(module_title, sub_title, "semantic", "F")
+                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                     break
                     
                 blocker = blockers[0]
@@ -779,6 +825,7 @@ class Orchestrator:
                 semantic_attempts += 1
                 continue
             else:
+                self.update_submodule_telemetry(module_title, sub_title, "semantic", str(semantic_attempts + 1))
                 log_event("Semantic Evaluator", "Passed: Semantic evaluation approved.")
                 
             break
@@ -921,10 +968,27 @@ class Orchestrator:
                     log_event("Orchestrator", f"Submodule '{sub.topic_title}' failed with blocker. Final blocker payload:\n{json.dumps(final_failure_payload, indent=2)}")
                     self.telemetry["failed_max_iterations"] += 1
                 else:
-                    if status == "approved":
+                    # Determine computed submodule title
+                    sub_title_comp = ""
+                    t_title = getattr(sub, "topic_title", None)
+                    if isinstance(t_title, str):
+                        sub_title_comp = t_title
+                    else:
+                        t_title = getattr(sub, "title", None)
+                        if isinstance(t_title, str):
+                            sub_title_comp = t_title
+                        elif t_title is not None:
+                            sub_title_comp = str(t_title)
+
+                    stats = self.telemetry.get("submodule_telemetry", {}).get(mod.module_title, {}).get(sub_title_comp, {})
+                    attempts = [int(v) for v in stats.values() if v in ["1", "2", "3"]]
+                    max_att = max(attempts) if attempts else 1
+                    if max_att == 1:
                         self.telemetry["passed_1st_iteration"] += 1
-                    elif status == "completed_with_warnings":
+                    elif max_att == 2:
                         self.telemetry["passed_2nd_iteration"] += 1
+                    elif max_att == 3:
+                        self.telemetry["passed_3rd_iteration"] += 1
                         
                 # Append submodule content to master file anyway (preserving usability)
                 with open(self.master_file, 'a', encoding='utf-8') as f:

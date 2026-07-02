@@ -348,10 +348,16 @@ async def stream(interval: float = 1.5):
     server pushes updates. No polling loop needed in the UI.
     """
     async def event_generator():
+        last_valid_telemetry = {}
         while True:
             pid = _get_pid()
             is_running = bool(pid and _is_running(pid))
             tel = _read_json(TELEMETRY_FILE)
+            if not tel and last_valid_telemetry:
+                tel = last_valid_telemetry
+            elif tel:
+                last_valid_telemetry = tel
+
             
             # Logical override: If the backend wrote that it finished, force it to false
             if tel.get("status") in ["Completed", "Stopped by user", "CRASHED", "Idle (previous run ended unexpectedly)"]:

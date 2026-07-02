@@ -33,14 +33,19 @@ export function useStream() {
       es.onmessage = (e) => {
         try {
           const data = JSON.parse(e.data)
-          setState({
-            isRunning: data.is_running,
-            pid: data.pid,
-            telemetry: data.telemetry || {},
-            logs: data.logs || [],
-            preview: data.preview,
-            isLive: data.is_live,
-            connected: true,
+          setState(prev => {
+            const nextTelemetry = data.telemetry && Object.keys(data.telemetry).length > 0
+              ? data.telemetry
+              : prev.telemetry;
+            return {
+              isRunning: data.is_running,
+              pid: data.pid,
+              telemetry: nextTelemetry,
+              logs: data.logs || [],
+              preview: data.preview,
+              isLive: data.is_live,
+              connected: true,
+            };
           })
         } catch { /* ignore parse errors */ }
       }

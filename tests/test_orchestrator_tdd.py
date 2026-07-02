@@ -25,8 +25,8 @@ def test_module_position_is_computed(tmp_path):
         modules=[
             Module(
                 title="Module 1",
-                module_context="",
-                submodules=[Submodule(title="Sub 1", content_context="")]
+                module_context="Module 1 Context",
+                submodules=[Submodule(title="Sub 1", content_context="Sub 1 Content Context")]
             )
         ]
     )

@@ -4,6 +4,7 @@ import { LogsPanel }      from './components/LogsPanel.jsx'
 import { ControlBar }     from './components/ControlBar.jsx'
 import { AuditAlert }     from './components/AuditAlert.jsx'
 import { PreviewPanel }   from './components/PreviewPanel.jsx'
+import { PipelineMatrix } from './components/PipelineMatrix.jsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
@@ -11,6 +12,7 @@ import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 export default function App() {
   const { isRunning, pid, telemetry, logs, preview, isLive, connected } = useStream()
   const [sidebarWidth, setSidebarWidth] = useState(420)
+  const [activeTab, setActiveTab] = useState('preview')
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const dragRef = useRef(false)
@@ -104,7 +106,34 @@ export default function App() {
 
           {/* Right panel */}
           <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950 relative z-0 min-w-0">
-            <PreviewPanel preview={preview} isLive={isLive} />
+            {/* Tabs Header */}
+            <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-800/50 bg-zinc-950 px-6 h-12">
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setActiveTab('preview')}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'preview' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  📖 Textbook Preview
+                </button>
+                <button
+                  onClick={() => setActiveTab('matrix')}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'matrix' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  📊 Pipeline Matrix
+                </button>
+              </div>
+            </div>
+
+            {/* Panel Content Area */}
+            <div className="flex-1 overflow-hidden relative">
+              {activeTab === 'preview' ? (
+                <PreviewPanel preview={preview} isLive={isLive} />
+              ) : (
+                <div className="w-full h-full overflow-auto p-8 custom-scrollbar">
+                  <PipelineMatrix telemetry={telemetry} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

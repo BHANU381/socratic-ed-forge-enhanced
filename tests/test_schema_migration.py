@@ -185,7 +185,7 @@ def test_removed_fields_ignored_safely():
     assert not hasattr(normalized.modules[0], "module_instructional_hours")
     assert not hasattr(normalized.modules[0], "module_goal")
     assert not hasattr(normalized.modules[0].topics[0], "topic_instructional_hours")
-    assert not hasattr(normalized.modules[0].topics[0], "inferred")
+    assert normalized.modules[0].topics[0].inferred is None
 
 def test_reference_guides_defaults_and_grounding():
     """Verify that reference_guides defaults to null and does not trigger errors."""
