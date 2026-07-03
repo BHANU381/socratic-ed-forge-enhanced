@@ -1,6 +1,6 @@
 import os
 import pytest
-from src.engine.orchestrator import normalize_draft, validate_draft
+from src.engine.orchestrator import normalize_draft, validate_draft, normalize_headings_dynamically
 
 DEFAULT_HEADINGS = [
     "### Introduction",
@@ -152,3 +152,38 @@ Simple text."""
     errors_invalid = validate_draft(invalid_draft, custom_headings)
     assert any("wrong order" in e.lower() for e in errors_invalid)
     assert any("First line of draft must be exactly '### The Hook'" in e for e in errors_invalid)
+
+
+def test_normalize_draft_corrects_heading_levels():
+    required_headings = [
+        "### Hook",
+        "#### Core Idea",
+        "#### Lesson Breakdown",
+        "#### Practical Walkthrough"
+    ]
+    
+    draft = """## Hook: Test Hook
+This is hook content.
+
+## Core Idea
+This is the core idea.
+
+##### Lesson Breakdown
+This is the breakdown.
+
+### Practical Walkthrough
+This is the walkthrough.
+"""
+    
+    normalized = normalize_headings_dynamically(draft, required_headings)
+    
+    assert "### Hook: Test Hook" in normalized
+    assert "#### Core Idea" in normalized
+    assert "#### Lesson Breakdown" in normalized
+    assert "#### Practical Walkthrough" in normalized
+    
+    assert not any(line.strip().startswith("## Hook:") for line in normalized.splitlines())
+    assert not any(line.strip().startswith("## Core Idea") for line in normalized.splitlines())
+    assert not any(line.strip().startswith("##### Lesson Breakdown") for line in normalized.splitlines())
+    assert not any(line.strip().startswith("### Practical Walkthrough") for line in normalized.splitlines())
+

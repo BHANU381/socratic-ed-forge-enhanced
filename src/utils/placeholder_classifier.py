@@ -39,7 +39,7 @@ def has_template_context(context_lines: list[str]) -> bool:
             return True
     return False
 
-def classify_placeholder(line: str, context_lines: list[str]) -> dict:
+def classify_placeholder(line: str, context_lines: list[str], in_code_block: bool = False) -> dict:
     line_lower = line.lower()
     line_stripped = line.strip()
     
@@ -79,13 +79,26 @@ def classify_placeholder(line: str, context_lines: list[str]) -> dict:
         match_lower = match_text.lower().strip()
         
         # Hard exclusions that are never allowed, even inside templates
-        if match_lower in ["todo", "tbd", "insert", "placeholder"]:
+        # "todo" and "tbd" are blocked anywhere inside brackets
+        if "todo" in match_lower or "tbd" in match_lower:
+            return {
+                "is_blocked": True,
+                "matched_term": full_match,
+                "rule_id": "unresolved_bracket_placeholder",
+                "reason": f"Unresolved placeholder containing '{match_lower}'"
+            }
+        # "insert" and "placeholder" are hard exclusions ONLY if they match exactly
+        if match_lower in ["insert", "placeholder"]:
             return {
                 "is_blocked": True,
                 "matched_term": full_match,
                 "rule_id": "unresolved_bracket_placeholder",
                 "reason": f"Unresolved {match_lower} placeholder"
             }
+            
+        # Allow all-uppercase environment/token parameters (e.g. [REMOTE_DNS_SERVER_TOKEN], [YOUR_API_KEY])
+        if re.match(r"^[A-Z0-9_-]+$", match_text.strip()):
+            continue
             
         # For other bracketed texts, check if there is a template context nearby
         if has_template_context(context_lines):

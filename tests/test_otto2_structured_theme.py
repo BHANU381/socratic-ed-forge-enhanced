@@ -183,3 +183,12 @@ def test_patch_editor_snapshot():
     assert "#### Practical Walkthrough" in content
     assert "Do NOT create headings for constraints" in content
 
+
+def test_generator_prompt_snapshot_fallback_rule():
+    generator_file = Path("src/prompts/otto2_structured/content_generator.md")
+    content = generator_file.read_text(encoding="utf-8")
+    assert "If any of the above optional fields" in content
+    assert "brainstorm, synthesize, and generate" in content
+    assert "direct, logical extensions" in content
+
+

@@ -43,6 +43,21 @@ def truncate_running_summary(summary: str) -> str:
         return "\n".join(target_bullets)
     return summary
 
+def normalize_headings_dynamically(draft: str, required_headings: List[str]) -> str:
+    if required_headings:
+        for req in required_headings:
+            match = re.match(r'^(#+)\s+(.+)$', req.strip())
+            if match:
+                expected_prefix = match.group(1)
+                title = match.group(2).strip()
+                if title.lower() == "hook":
+                    draft = re.sub(r'^#+\s*Hook\s*:\s*(.*)$', f'{expected_prefix} Hook: \\1', draft, flags=re.MULTILINE | re.IGNORECASE)
+                    draft = re.sub(r'^#+\s*Hook\s*$', f'{expected_prefix} Hook', draft, flags=re.MULTILINE | re.IGNORECASE)
+                else:
+                    draft = re.sub(r'^#+\s*' + re.escape(title) + r'\s*$', f'{expected_prefix} {title}', draft, flags=re.MULTILINE | re.IGNORECASE)
+    return draft
+
+
 def normalize_draft(draft: str, sub_title: str, required_headings: List[str]) -> str:
     # Normalize line endings and split
     lines = draft.replace('\r\n', '\n').split('\n')
@@ -288,6 +303,51 @@ class Orchestrator:
                         self.telemetry["submodule_telemetry"] = session_tel["submodule_telemetry"]
                 except Exception:
                     pass
+            self._recalculate_telemetry_summaries()
+
+    def _recalculate_telemetry_summaries(self):
+        self.telemetry["passed_1st_iteration"] = 0
+        self.telemetry["passed_2nd_iteration"] = 0
+        self.telemetry["passed_3rd_iteration"] = 0
+        self.telemetry["failed_max_iterations"] = 0
+        
+        completed = set()
+        manifest_path = self.session_dir / "run_manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                completed = set(data.get("completed_submodules", []))
+            except Exception:
+                pass
+                
+        for mod_title, sub_data in self.telemetry.get("submodule_telemetry", {}).items():
+            for sub_title, stats in sub_data.items():
+                if sub_title not in completed:
+                    continue
+                
+                is_failed = False
+                for val in stats.values():
+                    val_str = str(val).upper()
+                    if "F" in val_str or "FAIL" in val_str:
+                        is_failed = True
+                        break
+                        
+                if is_failed:
+                    self.telemetry["failed_max_iterations"] += 1
+                else:
+                    attempts = []
+                    for val in stats.values():
+                        val_str = str(val).strip()
+                        if val_str.isdigit():
+                            attempts.append(int(val_str))
+                    max_att = max(attempts) if attempts else 1
+                    if max_att == 1:
+                        self.telemetry["passed_1st_iteration"] += 1
+                    elif max_att == 2:
+                        self.telemetry["passed_2nd_iteration"] += 1
+                    elif max_att == 3:
+                        self.telemetry["passed_3rd_iteration"] += 1
 
     def update_submodule_telemetry(self, module: str, sub: str, agent: str, val: Any):
         st = self.telemetry.setdefault("submodule_telemetry", {})
@@ -577,6 +637,23 @@ class Orchestrator:
             blockers = [i for i in all_issues if i.severity == "blocker"]
             
             if blockers:
+                # Check for heading-related issues and normalize programmatically if possible
+                heading_issues = [
+                    i for i in blockers
+                    if i.issue_type in ["invalid_heading_level", "missing_section"]
+                    or "heading" in str(i.message).lower()
+                    or "header" in str(i.message).lower()
+                ]
+                if heading_issues:
+                    log_event("Deterministic Validator", "Heading level/format blocker detected. Running automatic heading normalization...")
+                    draft = normalize_headings_dynamically(draft, req_headings)
+                    # Re-run validators
+                    struct_res = validate_markdown_structure(draft)
+                    contract_res = validate_lesson_contract(draft, self.lesson_contract)
+                    all_issues = struct_res.issues + contract_res.issues
+                    blockers = [i for i in all_issues if i.severity == "blocker"]
+
+            if blockers:
                 if deterministic_attempts >= 2:
                     log_event("Deterministic Validator", f"Failed: Final blockers still present after patches: {blockers[0].message}")
                     self.update_submodule_telemetry(module_title, sub_title, "deterministic", "F")
@@ -853,6 +930,8 @@ class Orchestrator:
         warnings = [i for i in final_eval.issues if i.severity == "warning"]
         if blockers:
             log_event("Semantic Evaluator", f"Failed: Final blockers still present: {blockers[0].message}")
+            self.update_submodule_telemetry(module_title, sub_title, "semantic", "F")
+            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
         else:
             log_event("Semantic Evaluator", f"Passed: Evaluation passed. {len(warnings)} warnings found.")
         
@@ -1204,7 +1283,7 @@ def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str
         severity = "allow"
         
         from src.utils.placeholder_classifier import classify_placeholder
-        res_class = classify_placeholder(line, context_lines)
+        res_class = classify_placeholder(line, context_lines, in_code_block=in_code_block)
         if res_class.get("is_blocked"):
             matched_term = res_class["matched_term"]
             rule_id = res_class["rule_id"]

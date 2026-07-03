@@ -218,3 +218,61 @@ def test_quality_profile_light_runs_evaluator(tmp_path):
     # Assert that the semantic evaluator was called
     assert orch.semantic_evaluator.evaluate.call_count > 0
     assert status == "approved"
+
+
+def test_orchestrator_corrects_headings_on_blocker(tmp_path, monkeypatch):
+    from src.engine.orchestrator import Orchestrator
+    from src.models.schemas import CourseInput, QualityProfile, LessonContract
+    from unittest.mock import MagicMock
+    from src.validators.markdown_validator import ValidationResult
+    
+    course = CourseInput(
+        course_name="course-light",
+        topic="Topic",
+        duration_weeks=4,
+        quality_profile=QualityProfile.LIGHT,
+        modules=[]
+    )
+    
+    orch = Orchestrator(course, session_dir=tmp_path)
+    
+    # Provide a draft with bad heading level (## Introduction)
+    # The normalizer is expected to change it to ### Introduction
+    orch.generator.generate = MagicMock(
+        return_value="## Introduction\nThis is introductory content."
+    )
+    orch.generator.required_headings = ["### Introduction"]
+    from src.models.schemas import SectionRequirement
+    orch.lesson_contract = LessonContract(sections=[SectionRequirement(title="Introduction")])
+    
+    # We mock validators:
+    # First call to validate_markdown_structure will find blocker because of ## heading.
+    # Second call (after normalization) should find no blockers.
+    from src.validators.markdown_validator import ValidationIssue
+    issue_fail = ValidationIssue(
+        severity="blocker",
+        issue_type="invalid_heading_level",
+        message="Found illegal header level '## Introduction'",
+        section="Introduction"
+    )
+    res_fail = ValidationResult(passed=False, issues=[issue_fail])
+    res_pass = ValidationResult(passed=True, issues=[])
+    
+    from src.validators import markdown_validator
+    import src.validators.lesson_contract_validator as cv
+    monkeypatch.setattr(markdown_validator, "validate_markdown_structure", MagicMock(side_effect=[res_fail, res_pass]))
+    monkeypatch.setattr(cv, "validate_lesson_contract", MagicMock(return_value=res_pass))
+    
+    orch.semantic_evaluator.evaluate = MagicMock(return_value=res_pass)
+    
+    submodule = MagicMock()
+    submodule.topic_title = "Submodule 1.1"
+    submodule.content_context = "Context"
+    submodule.topic_material_ids = []
+    
+    status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    
+    # The pipeline should succeed because the orchestrator corrected the heading level on the blocker!
+    assert status == "approved"
+    assert "### Introduction" in final_draft
+

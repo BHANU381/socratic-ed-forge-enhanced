@@ -54,6 +54,11 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Expert Heuristic: {expert_heuristic}
 - Evaluation Path: {evaluation_path}
 
+*Note: If any of the above optional fields (such as breakdown, edge_cases, action_items, or common_mistakes) are blank, empty, or not provided, you MUST still brainstorm, synthesize, and generate highly relevant, professional content for those required sections. Any synthesized sections MUST:*
+1. Be direct, logical extensions of the '{concept}' and the provided '{grounding_context}' (do not invent unrelated external frameworks).
+2. Directly align with the active Learner Level ({learner_level}) and Explanation Depth ({explanation_depth})—i.e., advanced topics require advanced edge cases/mistakes.
+3. Contain fully written content; do NOT use authoring placeholders (like [TODO] or [Explain here]).
+
 {learner_level_rules}
 
 ### INTERNAL GUIDANCE RULES (CRITICAL)
