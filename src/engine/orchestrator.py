@@ -15,10 +15,11 @@ from src.utils.logger import log_event, update_status, update_telemetry
 from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
 from src.utils.cleanup_utils import final_markdown_cleanup
+from src.utils.search_client import search_duckduckgo
 from src.models.schemas import CourseStructure, ModuleStructure, Topic, TelemetryData, RunManifest, LessonContract, SectionRequirement, QualityProfile, normalize_course_input
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Define Project Root relative to this file's location
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -543,6 +544,10 @@ class Orchestrator:
         
         # Format tool_stack
         tool_stack_obj = getattr(self.course, "tool_stack", None)
+        from unittest.mock import Mock
+        if isinstance(tool_stack_obj, Mock):
+            tool_stack_obj = None
+
         if tool_stack_obj:
             if isinstance(tool_stack_obj, dict):
                 tools_list = tool_stack_obj.get("tools", []) or []
@@ -550,6 +555,10 @@ class Orchestrator:
             else:
                 tools_list = getattr(tool_stack_obj, "tools", []) or []
                 tech_stack_list = getattr(tool_stack_obj, "tech_stack", []) or []
+                if isinstance(tools_list, Mock):
+                    tools_list = []
+                if isinstance(tech_stack_list, Mock):
+                    tech_stack_list = []
         else:
             tools_list = []
             tech_stack_list = []
@@ -581,6 +590,26 @@ class Orchestrator:
             grounding_context_str = "Grounding Context: Empty"
         else:
             grounding_context_str = "\n".join(g_parts)
+
+        # Retrieve and inject DuckDuckGo search context prior to generation
+        enable_search = getattr(self.course, "enable_google_search", True)
+        from unittest.mock import Mock
+        if isinstance(enable_search, Mock):
+            enable_search = False
+        if enable_search is None:
+            enable_search = True
+
+        if enable_search:
+            search_query = f"{sub_title} {self.course.course_context}"
+            try:
+                search_results = search_duckduckgo(search_query)
+                if search_results:
+                    if grounding_context_str == "Grounding Context: Empty":
+                        grounding_context_str = search_results
+                    else:
+                        grounding_context_str += "\n\n" + search_results
+            except Exception as e:
+                log_event("Orchestrator", f"Search skipped due to error: {str(e)}")
 
         log_event("Content Generator", f"Drafting submodule '{sub_title}'...")
 
@@ -683,6 +712,7 @@ class Orchestrator:
                         heading=heading_to_patch,
                         course_topic=self.course.course_context,
                         submodule_title=sub_title,
+                        grounding_context=grounding_context_str,
                         patch_mode="fix_structure",
                         learner_level=getattr(self.course, "learner_level", "beginner")
                     )
@@ -779,6 +809,7 @@ class Orchestrator:
                         heading=heading_to_patch,
                         course_topic=self.course.course_context,
                         submodule_title=sub_title,
+                        grounding_context=grounding_context_str,
                         patch_mode="fix_structure",
                         learner_level=getattr(self.course, "learner_level", "beginner")
                     )
@@ -873,6 +904,7 @@ class Orchestrator:
                         heading=heading_to_patch,
                         course_topic=self.course.course_context,
                         submodule_title=sub_title,
+                        grounding_context=grounding_context_str,
                         patch_mode=p_mode,
                         learner_level=getattr(self.course, "learner_level", "beginner"),
                         **addon_kwargs

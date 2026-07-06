@@ -46,13 +46,12 @@ def test_beginner_content_unexplained_jargon_is_blocker(test_course, tmp_path):
         # Patch the deterministic validators to pass instantly
         with patch('src.validators.markdown_validator.validate_markdown_structure') as mock_md, \
              patch('src.validators.lesson_contract_validator.validate_lesson_contract') as mock_lc, \
+             patch.object(orchestrator.generator, 'generate') as mock_gen, \
              patch.object(orchestrator.patch_editor, 'edit_patch') as mock_patch:
              
             mock_md.return_value = MagicMock(passed=True, issues=[], detected_headings=["Introduction", "Core Concepts", "Summary"])
             mock_lc.return_value = MagicMock(passed=True, issues=[], detected_headings=["Introduction", "Core Concepts", "Summary"])
-            
-            # Simulate a dummy draft
-            dummy_draft = "### Introduction\n\n### Core Concepts\n\n### Summary"
+            mock_gen.return_value = "### Introduction\n\n### Core Concepts\n\n### Summary"
             
             # When the patch editor is called, it should receive the 'simplify_for_beginner' patch mode if handled in Orchestrator
             # We don't have patch mode strictly passed in edit_patch signature in the mock yet, but we will assert the orchestrator attempts to call it.

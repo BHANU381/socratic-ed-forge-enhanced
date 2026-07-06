@@ -9,7 +9,7 @@ from google import genai
 from google.genai import errors
 
 # Load env variables
-load_dotenv()
+load_dotenv(override=True)
 
 # Define Project Root relative to this file's location
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -119,6 +119,13 @@ class AgentBase:
         self.theme = theme
         self.client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
         self.system_instruction = f"You are an expert {role} in a high-end textbook production team. Your output must be academic, precise, and free of any conversational fluff."
+        if role.lower() == "content generator":
+            self.system_instruction += (
+                " When using Google Search to look up code implementation details, syntax, or library usage, "
+                "prioritize searching and reading from official documentation websites "
+                "(e.g., react.dev, python.org, npmjs.com, MDN Web Docs) to ensure your code matches modern, "
+                "production-ready standards. Do NOT include raw search citation index markers (like [1], [2], or inline footnotes) in the output text."
+            )
         self.input_tokens = 0
         self.output_tokens = 0
         self.consecutive_failures = 0
@@ -146,7 +153,7 @@ class AgentBase:
             return lessons.strip()
         return ""
 
-    def _run_with_retry(self, prompt, response_schema=None):
+    def _run_with_retry(self, prompt, response_schema=None, enable_google_search=True):
         from src.utils.logger import log_event
         
         retries = 0
@@ -159,9 +166,10 @@ class AgentBase:
 
             try:
                 config = {"system_instruction": self.system_instruction}
-                if hasattr(self, 'response_schema') and self.response_schema:
+                has_schema = (hasattr(self, 'response_schema') and self.response_schema) or response_schema
+                if has_schema:
                     config["response_mime_type"] = "application/json"
-                    config["response_schema"] = self.response_schema
+                    config["response_schema"] = self.response_schema or response_schema
                     
                 response = self.client.models.generate_content(
                     model=self.model_id,
@@ -179,6 +187,13 @@ class AgentBase:
                 
                 # Record request into history
                 rate_limiter.record_request(actual_prompt_tokens)
+                
+                # Extract and store native search grounding metadata
+                self.last_grounding_metadata = None
+                if hasattr(response, "candidates") and response.candidates:
+                    cand = response.candidates[0]
+                    if hasattr(cand, "grounding_metadata") and cand.grounding_metadata:
+                        self.last_grounding_metadata = cand.grounding_metadata
                 
                 # Reset consecutive failures on success
                 self.consecutive_failures = 0
@@ -376,7 +391,12 @@ class ContentGenerator(AgentBase):
                              learning_context_block=learning_context_block,
                              running_summary=running_summary,
                              **merged_kwargs)
-        return self._run_with_retry(prompt)
+        enable_search = True
+        if course_info and hasattr(course_info, "enable_google_search"):
+            enable_search = getattr(course_info, "enable_google_search")
+            if enable_search is None:
+                enable_search = True
+        return self._run_with_retry(prompt, enable_google_search=enable_search)
 
 class Archivist(AgentBase):
     def __init__(self, role="archivist", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="default"):
@@ -782,7 +802,7 @@ class PatchEditor(AgentBase):
         from src.models.schemas import PatchResult
         self.response_schema = PatchResult
 
-    def edit_patch(self, draft, feedback, heading, course_topic, submodule_title, **kwargs):
+    def edit_patch(self, draft, feedback, heading, course_topic, submodule_title, grounding_context="", **kwargs):
         kwargs.setdefault("learner_level", "beginner")
         kwargs.setdefault("code_example_style", "progressive_production")
         kwargs.setdefault("explanation_depth", "balanced")
@@ -803,6 +823,7 @@ class PatchEditor(AgentBase):
                              heading=heading,
                              course_topic=course_topic,
                              submodule_title=submodule_title,
+                             grounding_context=grounding_context,
                              **kwargs)
         raw_res = self._run_with_retry(prompt)
         

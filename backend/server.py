@@ -15,7 +15,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -212,6 +212,7 @@ async def start_pipeline(
     code_example_style: Optional[str] = Form(None),
     explanation_depth: Optional[str] = Form(None),
     quality_profile: Optional[str] = Form(None),
+    enable_google_search: Optional[bool] = Form(None),
     resume: Optional[bool] = Form(None)
 ):
     pid = _get_pid()
@@ -232,6 +233,8 @@ async def start_pipeline(
             data["explanation_depth"] = explanation_depth
         if quality_profile is not None:
             data["quality_profile"] = quality_profile
+        if enable_google_search is not None:
+            data["enable_google_search"] = enable_google_search
             
         # Validate schema and normalize it to ensure the structure is correct
         from src.models.schemas import normalize_course_input

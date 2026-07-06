@@ -47,6 +47,12 @@
             "text": "Ensure every identified section contains substantive content; delete headers for empty or non-existent subsections.",
             "count": 4,
             "last_updated": "2026-07-02T15:31:08.696333"
+        },
+        {
+            "id": "rule_09",
+            "text": "Mandatorily include a Core Idea section in every technical response.",
+            "count": 1,
+            "last_updated": "2026-07-03T16:31:38.056523"
         }
     ]
 }

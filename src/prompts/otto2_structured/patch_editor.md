@@ -17,6 +17,9 @@ Specific topic details to enforce:
 {common_mistakes}
 - Expert Heuristic: {expert_heuristic}
 
+### GROUNDING MATERIALS
+{grounding_context}
+
 ### ORIGINAL DRAFT
 ```markdown
 {draft}

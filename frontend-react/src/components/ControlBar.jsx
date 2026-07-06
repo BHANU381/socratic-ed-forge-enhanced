@@ -15,6 +15,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [expDepth, setExpDepth]         = useState("balanced")
   const [qualityProfile, setQualityProfile] = useState("standard")
   const [resume, setResume]             = useState(false)
+  const [enableSearch, setEnableSearch] = useState(true)
   const fileInputRef            = useRef(null)
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
       fd.append('explanation_depth', expDepth)
       fd.append('quality_profile', qualityProfile)
       fd.append('resume', resume.toString())
+      fd.append('enable_google_search', enableSearch.toString())
       const res = await fetch('/api/start', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
@@ -213,17 +215,31 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 mt-1">
-              <input
-                id="resume-checkbox"
-                type="checkbox"
-                checked={resume}
-                onChange={e => setResume(e.target.checked)}
-                className="rounded border-zinc-800 bg-zinc-900/50 text-zinc-200 focus:ring-zinc-500 h-3.5 w-3.5"
-              />
-              <label htmlFor="resume-checkbox" className="text-xs text-muted-foreground cursor-pointer select-none">
-                Resume from last incomplete session
-              </label>
+            <div className="flex flex-col gap-2 mt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  id="resume-checkbox"
+                  type="checkbox"
+                  checked={resume}
+                  onChange={e => setResume(e.target.checked)}
+                  className="rounded border-zinc-800 bg-zinc-900/50 text-zinc-200 focus:ring-zinc-500 h-3.5 w-3.5"
+                />
+                <label htmlFor="resume-checkbox" className="text-xs text-muted-foreground cursor-pointer select-none">
+                  Resume from last incomplete session
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="search-checkbox"
+                  type="checkbox"
+                  checked={enableSearch}
+                  onChange={e => setEnableSearch(e.target.checked)}
+                  className="rounded border-zinc-800 bg-zinc-900/50 text-zinc-200 focus:ring-zinc-500 h-3.5 w-3.5"
+                />
+                <label htmlFor="search-checkbox" className="text-xs text-muted-foreground cursor-pointer select-none">
+                  Enable Google Search grounding tool
+                </label>
+              </div>
             </div>
 
             <button 

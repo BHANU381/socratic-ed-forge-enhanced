@@ -73,6 +73,7 @@ class CourseInput(BaseModel):
     learner_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
     code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
+    enable_google_search: Optional[bool] = True
 
 
 # Strict base model for modern/new models
@@ -244,6 +245,7 @@ class CourseStructure(StrictBaseModel):
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
     student_personas: List[StudentPersona] = Field(default_factory=list)
     lesson_contract: Optional[LessonContract] = None
+    enable_google_search: Optional[bool] = True
 
     # Optional grounding/material fields
     tool_stack: Optional[ToolStack] = None
@@ -267,7 +269,7 @@ class CourseStructure(StrictBaseModel):
     def default_none_to_dict(cls, v):
         return {} if v is None else v
 
-    @field_validator("prompt_theme", "quality_profile", "learner_level", "code_example_style", "explanation_depth", mode="before")
+    @field_validator("prompt_theme", "quality_profile", "learner_level", "code_example_style", "explanation_depth", "enable_google_search", mode="before")
     @classmethod
     def default_none_to_str_defaults(cls, v, info):
         if v is None:
@@ -276,7 +278,8 @@ class CourseStructure(StrictBaseModel):
                 "quality_profile": QualityProfile.STANDARD,
                 "learner_level": "beginner",
                 "code_example_style": "progressive_production",
-                "explanation_depth": "balanced"
+                "explanation_depth": "balanced",
+                "enable_google_search": True
             }
             return defaults.get(info.field_name)
         return v
