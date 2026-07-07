@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist, GroundingFaithfulnessAuditor
+from src.agents.core import ContentGenerator, SemanticEvaluator, PatchEditor, Archivist, GroundingFaithfulnessAuditor, AnalogyAgent, AnalogyEvaluator
 from src.utils.logger import log_event, update_status, update_telemetry
 from src.utils.learning_engine import record_lesson
 from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading, normalize_step_headings
@@ -201,6 +201,8 @@ class Orchestrator:
         self.grounding_auditor = GroundingFaithfulnessAuditor("Grounding Faithfulness Auditor", theme=self.course.prompt_theme)
         self.patch_editor = PatchEditor("Patch Editor", theme=self.course.prompt_theme)
         self.archivist = Archivist("Archivist", theme=self.course.prompt_theme)
+        self.analogy_generator = AnalogyAgent("Analogy Generator", theme=self.course.prompt_theme)
+        self.analogy_evaluator = AnalogyEvaluator("Analogy Evaluator", theme=self.course.prompt_theme)
         
         # Define lesson contract and quality profile with dynamic defaults
         self.quality_profile = self.course.quality_profile or QualityProfile.STANDARD
@@ -278,7 +280,11 @@ class Orchestrator:
             "failure_reasons": [],
             "grounding_auditor_status": "passed",
             "grounding_auditor_attempts": 0,
-            "grounding_auditor_blockers": []
+            "grounding_auditor_blockers": [],
+            "analogy_generator_attempts": 0,
+            "analogy_evaluator_status": "none",
+            "analogy_evaluator_blockers": [],
+            "analogy_fallback_triggered": False
         }
         
         # Populate course structure
@@ -541,6 +547,7 @@ class Orchestrator:
         self.update_submodule_telemetry(module_title, sub_title, "deterministic", "-")
         self.update_submodule_telemetry(module_title, sub_title, "grounding", "-")
         self.update_submodule_telemetry(module_title, sub_title, "semantic", "-")
+        self.update_submodule_telemetry(module_title, sub_title, "analogy", "-")
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
 
         
@@ -1006,7 +1013,110 @@ class Orchestrator:
         
         if blockers:
             return "failed_blocker", draft
-        elif warnings:
+
+        # Core technical content approved. Let's generate student-persona analogies if required.
+        requires_analogies = False
+        if hasattr(self, "lesson_contract") and self.lesson_contract and self.lesson_contract.sections:
+            requires_analogies = any(sec.title == "Persona Analogies" for sec in self.lesson_contract.sections)
+
+        if requires_analogies:
+            log_event("Orchestrator", "Core technical content approved. Generating persona analogies...")
+            self.telemetry["current_agent"] = "Analogy Generator"
+            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+            
+            from src.models.schemas import StudentPersona
+            personas_str = self._format_student_personas()
+            
+            self.telemetry["analogy_generator_attempts"] = 1
+            analogies_text = self.analogy_generator.generate(
+                final_lesson=draft,
+                student_personas=personas_str
+            )
+            self.update_agent_tokens("analogy_generator", self.analogy_generator)
+            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+            
+            # Audit generated analogies with Analogy Evaluator
+            log_event("Orchestrator", "Auditing generated analogies with Analogy Evaluator...")
+            self.telemetry["current_agent"] = "Analogy Evaluator"
+            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+            
+            eval_result = self.analogy_evaluator.evaluate(
+                final_lesson=draft,
+                analogies=analogies_text,
+                student_personas=personas_str
+            )
+            self.telemetry["analogy_evaluator_status"] = "passed" if eval_result.get("status") == "APPROVED" else "failed"
+            self.telemetry["analogy_evaluator_blockers"] = eval_result.get("reasons", [])
+            self.update_agent_tokens("analogy_evaluator", self.analogy_evaluator)
+            
+            if eval_result.get("status") == "APPROVED":
+                self.update_submodule_telemetry(module_title, sub_title, "analogy", "1")
+            update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+            
+            # Repair loop (Retry once if rejected)
+            if eval_result.get("status") != "APPROVED":
+                log_event("Analogy Evaluator", f"Rejected: {', '.join(eval_result.get('reasons', []))}. Retrying repair...")
+                self.telemetry["current_agent"] = "Analogy Generator"
+                self.telemetry["analogy_generator_attempts"] = 2
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                repair_prompt = f"The previous analogies were rejected for these reasons: {', '.join(eval_result.get('reasons', []))}. Please rewrite the analogies addressing these issues."
+                analogies_text = self.analogy_generator.generate(
+                    final_lesson=draft,
+                    student_personas=personas_str,
+                    feedback=repair_prompt
+                )
+                self.update_agent_tokens("analogy_generator", self.analogy_generator)
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                # Re-evaluate
+                log_event("Orchestrator", "Re-auditing repaired analogies...")
+                self.telemetry["current_agent"] = "Analogy Evaluator"
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                eval_result = self.analogy_evaluator.evaluate(
+                    final_lesson=draft,
+                    analogies=analogies_text,
+                    student_personas=personas_str
+                )
+                self.telemetry["analogy_evaluator_status"] = "passed" if eval_result.get("status") == "APPROVED" else "failed"
+                self.telemetry["analogy_evaluator_blockers"] = eval_result.get("reasons", [])
+                self.update_agent_tokens("analogy_evaluator", self.analogy_evaluator)
+                
+                if eval_result.get("status") == "APPROVED":
+                    self.update_submodule_telemetry(module_title, sub_title, "analogy", "2")
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+            # Fallback if still rejected or failed
+            if eval_result.get("status") != "APPROVED":
+                log_event("Analogy Evaluator", "Double validation failure. Falling back to pre-templated analogies.")
+                self.telemetry["analogy_fallback_triggered"] = True
+                self.update_submodule_telemetry(module_title, sub_title, "analogy", "F")
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                fallback_parts = []
+                active_personas = getattr(self.course, "student_personas", []) or []
+                default_p = StudentPersona(
+                    name="Default Student",
+                    context=f"A general learner seeking practical analogies related to: {self.course.course_context}."
+                )
+                for p in list(active_personas) + [default_p]:
+                    fallback_parts.append(f"##### {p.name}\nLearning {sub_title} is exactly like building a system from its fundamental parts, allowing you to connect raw theory directly to real-world experience.")
+                analogies_text = "\n\n".join(fallback_parts)
+                
+            # Robust regex placeholder replacement
+            pattern = re.compile(r'\[PLACEHOLDER\]', re.IGNORECASE)
+            if pattern.search(draft):
+                draft = pattern.sub(analogies_text, draft)
+                log_event("Orchestrator", "Analogies successfully compiled into lesson draft.")
+            else:
+                log_event("Orchestrator", "WARNING: Analogy placeholder not found. Appending analogies to end.")
+                draft += "\n\n" + analogies_text
+
+        self.telemetry["current_agent"] = "None"
+        self.telemetry["active_iterations"] = 0
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+
+        if warnings:
             return "completed_with_warnings", draft
         else:
             return "approved", draft
@@ -1149,12 +1259,12 @@ class Orchestrator:
                 
                 # Telemetry update
                 self.telemetry["progress_percent"] = int((len(manifest.completed_submodules) / total_submodules) * 100)
-                update_telemetry(self.telemetry, session_dir=str(session_dir))
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                 
                 # Run Archivist for this submodule
-                log_event("Archivist", f"Summarizing {sub.topic_title}...", session_dir=str(session_dir))
+                log_event("Archivist", f"Summarizing {sub.topic_title}...", session_dir=str(self.session_dir))
                 self.telemetry["current_agent"] = "Archivist"
-                update_telemetry(self.telemetry, session_dir=str(session_dir))
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
                 try:
                     self.archivist.input_tokens = 0
                     self.archivist.output_tokens = 0

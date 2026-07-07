@@ -1,5 +1,6 @@
 import pytest
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from src.engine.orchestrator import Orchestrator
 from src.models.schemas import CourseInput, Module, Submodule, LessonContract, SectionRequirement
@@ -47,7 +48,8 @@ def test_beginner_content_unexplained_jargon_is_blocker(test_course, tmp_path):
         with patch('src.validators.markdown_validator.validate_markdown_structure') as mock_md, \
              patch('src.validators.lesson_contract_validator.validate_lesson_contract') as mock_lc, \
              patch.object(orchestrator.generator, 'generate') as mock_gen, \
-             patch.object(orchestrator.patch_editor, 'edit_patch') as mock_patch:
+             patch.object(orchestrator.patch_editor, 'edit_patch') as mock_patch, \
+             patch('src.engine.orchestrator.search_duckduckgo', return_value="Mocked search context"):
              
             mock_md.return_value = MagicMock(passed=True, issues=[], detected_headings=["Introduction", "Core Concepts", "Summary"])
             mock_lc.return_value = MagicMock(passed=True, issues=[], detected_headings=["Introduction", "Core Concepts", "Summary"])
@@ -81,4 +83,30 @@ def test_module_position_computed_correctly(test_course, tmp_path):
         # The telemetry should have module_position (e.g. "1/1" for this 1-module test course)
         # Note: We will add module_position logic to Orchestrator next.
         # This test ensures we've mocked the structure to allow asserting.
+
+
+def test_semantic_evaluator_prompt_has_placeholder_bypass():
+    prompt_path = Path("src/prompts/otto2_structured/semantic_evaluator.md")
+    assert prompt_path.exists()
+    content = prompt_path.read_text(encoding="utf-8")
+    assert "[placeholder]" in content.lower()
+    assert "persona analogies" in content.lower()
+    assert "excluding" in content.lower()
+    assert "min_words" in content.lower()
+
+
+def test_analogy_evaluator_prompt_formatting():
+    from src.utils.prompt_loader import load_prompt
+    # This should not raise KeyError
+    prompt, _ = load_prompt(
+        "analogy_evaluator.md",
+        theme="otto2_structured",
+        final_lesson="lesson",
+        analogies="analogies",
+        student_personas="personas"
+    )
+    assert "lesson" in prompt
+
+
+
 

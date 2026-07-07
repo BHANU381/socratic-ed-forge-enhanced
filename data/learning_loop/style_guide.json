@@ -9,8 +9,8 @@
         {
             "id": "rule_02",
             "text": "Replace all bracketed placeholders with specific project requirements before finalizing technical documentation or prompts.",
-            "count": 12,
-            "last_updated": "2026-07-02T15:28:24.763403"
+            "count": 58,
+            "last_updated": "2026-07-07T16:57:08.384658"
         },
         {
             "id": "rule_03",
@@ -21,14 +21,14 @@
         {
             "id": "rule_04",
             "text": "Always include the mandatory Practical Walkthrough section in all generated technical documentation.",
-            "count": 2,
-            "last_updated": "2026-07-02T14:59:34.709440"
+            "count": 4,
+            "last_updated": "2026-07-07T13:10:55.443589"
         },
         {
             "id": "rule_05",
             "text": "Mandatory: Every technical document generation must include the Core Idea section as the primary header.",
-            "count": 1,
-            "last_updated": "2026-06-30T14:26:13.632250"
+            "count": 2,
+            "last_updated": "2026-07-07T15:19:29.636078"
         },
         {
             "id": "rule_06",
@@ -39,20 +39,44 @@
         {
             "id": "rule_07",
             "text": "Always include an Edge Cases section in every technical document to ensure comprehensive requirement coverage.",
-            "count": 1,
-            "last_updated": "2026-07-02T12:32:44.180868"
+            "count": 2,
+            "last_updated": "2026-07-07T12:21:31.045388"
         },
         {
             "id": "rule_08",
             "text": "Ensure every identified section contains substantive content; delete headers for empty or non-existent subsections.",
-            "count": 4,
-            "last_updated": "2026-07-02T15:31:08.696333"
+            "count": 9,
+            "last_updated": "2026-07-07T16:57:28.504686"
         },
         {
             "id": "rule_09",
             "text": "Mandatorily include a Core Idea section in every technical response.",
-            "count": 2,
-            "last_updated": "2026-07-06T12:54:00.417191"
+            "count": 6,
+            "last_updated": "2026-07-07T16:36:29.498090"
+        },
+        {
+            "id": "rule_10",
+            "text": "Mandate adherence to the structural contract by verifying all required headers before finalizing any content generation.",
+            "count": 4,
+            "last_updated": "2026-07-07T15:25:29.828511"
+        },
+        {
+            "id": "rule_11",
+            "text": "Mandatory structure: Include Practical Walkthrough, Edge Cases, Common Mistakes, Action Items, and Why It Matters in every draft.",
+            "count": 4,
+            "last_updated": "2026-07-07T13:10:32.586484"
+        },
+        {
+            "id": "rule_12",
+            "text": "Mandate all structural components\u2014Core Idea, Breakdown, Analogies, Walkthrough, Edge Cases, Mistakes, Action Items, and Significance\u2014before final output generation.",
+            "count": 1,
+            "last_updated": "2026-07-07T12:58:01.266036"
+        },
+        {
+            "id": "rule_13",
+            "text": "Include all mandatory structural headers, specifically #### Edge Cases, in every lesson draft generation.",
+            "count": 1,
+            "last_updated": "2026-07-07T13:02:26.656452"
         }
     ]
 }

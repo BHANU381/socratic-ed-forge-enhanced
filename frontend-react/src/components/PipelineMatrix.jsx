@@ -53,10 +53,11 @@ export function PipelineMatrix({ telemetry }) {
         <table className="w-full border-collapse text-left text-xs">
           <thead>
             <tr className="border-b border-zinc-800/50 bg-zinc-900/40 text-zinc-400 font-medium">
-              <th className="p-4 w-[40%]">Module / Submodule</th>
-              <th className="p-4 text-center w-[20%]">Deterministic Validator</th>
-              <th className="p-4 text-center w-[20%]">Grounding Auditor</th>
-              <th className="p-4 text-center w-[20%]">Semantic Evaluator</th>
+              <th className="p-4 w-[36%]">Module / Submodule</th>
+              <th className="p-4 text-center w-[16%]">Deterministic Validator</th>
+              <th className="p-4 text-center w-[16%]">Grounding Auditor</th>
+              <th className="p-4 text-center w-[16%]">Semantic Evaluator</th>
+              <th className="p-4 text-center w-[16%]">Analogy Agent</th>
             </tr>
           </thead>
           <tbody>
@@ -68,7 +69,7 @@ export function PipelineMatrix({ telemetry }) {
                 <React.Fragment key={modIdx}>
                   {/* Module Group Row */}
                   <tr className="bg-zinc-900/20 border-b border-zinc-800/30">
-                    <td colSpan={4} className="p-3 font-semibold text-zinc-300 bg-zinc-900/10 font-sans tracking-wide">
+                    <td colSpan={5} className="p-3 font-semibold text-zinc-300 bg-zinc-900/10 font-sans tracking-wide">
                       📁 {modTitle}
                     </td>
                   </tr>
@@ -79,6 +80,7 @@ export function PipelineMatrix({ telemetry }) {
                     const det = stats.deterministic || '-'
                     const gro = stats.grounding || '-'
                     const sem = stats.semantic || '-'
+                    const ana = stats.analogy || '-'
 
                     return (
                       <tr 
@@ -96,6 +98,9 @@ export function PipelineMatrix({ telemetry }) {
                         </td>
                         <td className="p-4 text-center">
                           {renderBadge(sem)}
+                        </td>
+                        <td className="p-4 text-center">
+                          {renderBadge(ana)}
                         </td>
                       </tr>
                     )

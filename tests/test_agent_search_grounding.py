@@ -50,7 +50,11 @@ def test_orchestrator_integrates_duckduckgo_results():
         
         # Triggering generate draft should call search_duckduckgo
         submodule = MagicMock(title="Networking")
-        with patch.object(pipeline.generator, "generate") as mock_generate:
+        with patch.object(pipeline.generator, "generate") as mock_generate, \
+             patch.object(pipeline.grounding_auditor, "audit_grounding", return_value={"status": "APPROVED"}), \
+             patch.object(pipeline.semantic_evaluator, "evaluate", return_value=MagicMock(issues=[])), \
+             patch.object(pipeline.analogy_generator, "generate", return_value="Some analogies"), \
+             patch.object(pipeline.analogy_evaluator, "evaluate", return_value={"status": "APPROVED", "reasons": []}):
             mock_generate.return_value = "### Networking\nDraft Content"
             pipeline.run_submodule_pipeline(submodule, "Module Title", "Content Context", "Learning Context")
             mock_search.assert_called_once_with("Networking Core Python concepts")

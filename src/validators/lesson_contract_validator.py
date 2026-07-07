@@ -144,7 +144,12 @@ def validate_lesson_contract(content: str, contract: LessonContract) -> Validati
                 has_usefulness = sections_usefulness.get(matched_heading_normalized, False)
                 target = target_val if target_val is not None else min_val
                 
-                if matched_word_count == 0 and not has_usefulness:
+                raw_text = "".join(sections_content.get(matched_heading_normalized, [])).strip()
+                is_placeholder = bool(re.match(r"^\[?placeholder\]?$", raw_text, re.IGNORECASE))
+                
+                if is_placeholder:
+                    pass
+                elif matched_word_count == 0 and not has_usefulness:
                     issues.append(ValidationIssue(
                         severity="blocker",
                         issue_type="empty_section",

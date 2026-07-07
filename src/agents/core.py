@@ -913,4 +913,59 @@ class GroundingFaithfulnessAuditor(AgentBase):
             }
 
 
+from pydantic import BaseModel
+from typing import List, Literal
+
+class AnalogyEvaluatorResponse(BaseModel):
+    status: Literal["APPROVED", "REJECTED"]
+    reasons: List[str]
+
+class AnalogyAgent(AgentBase):
+    def __init__(self, role="analogy_generator", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="otto2_structured"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are an expert academic analogy writer. Output only markdown analogy sections."
+
+    def generate(self, final_lesson, student_personas, **kwargs):
+        prompt, _ = load_prompt("analogy_generator.md",
+                               theme=self.theme,
+                               final_lesson=final_lesson,
+                               student_personas=student_personas,
+                               **kwargs)
+        return self._run_with_retry(prompt)
+
+class AnalogyEvaluator(AgentBase):
+    def __init__(self, role="analogy_evaluator", model_id="gemini-3.1-flash-lite", max_consecutive_failures=3, theme="otto2_structured"):
+        super().__init__(role=role, model_id=model_id, max_consecutive_failures=max_consecutive_failures, theme=theme)
+        self.system_instruction = "You are an expert analogy evaluation auditor. You must return only valid JSON matching the schema."
+        self.response_schema = AnalogyEvaluatorResponse
+
+    def evaluate(self, final_lesson, analogies, student_personas, **kwargs):
+        prompt, _ = load_prompt("analogy_evaluator.md",
+                               theme=self.theme,
+                               final_lesson=final_lesson,
+                               analogies=analogies,
+                               student_personas=student_personas,
+                               **kwargs)
+        response_text = self._run_with_retry(prompt)
+        try:
+            clean_text = response_text.strip()
+            if clean_text.startswith("```json"):
+                clean_text = clean_text[7:]
+            if clean_text.endswith("```"):
+                clean_text = clean_text[:-3]
+            clean_text = clean_text.strip()
+            result = json.loads(clean_text)
+            if "status" not in result:
+                result["status"] = "REJECTED"
+            if "reasons" not in result:
+                result["reasons"] = ["Missing evaluation reasons."]
+            return result
+        except Exception as e:
+            return {
+                "status": "REJECTED",
+                "reasons": [f"Malformed JSON response from evaluator: {str(e)}"]
+            }
+
+
+
 

@@ -13,7 +13,9 @@ EXPECTED_KWARGS = {
     "patch_editor.md": {"draft", "feedback", "heading", "course_topic", "submodule_title", "learner_level", "patch_mode", "issues", "lesson_contract", "running_summary", "breakdown", "topic_constraints", "edge_cases", "action_items", "common_mistakes", "expert_heuristic", "evaluation_path", "grounding_context", "student_personas"},
     "grounding_faithfulness_auditor.md": {"content", "course_context", "module_context", "topic_context", "tool_stack", "grounding_context"},
     "style_synthesizer_rule.md": {"critique", "correction"},
-    "style_synthesizer_duplicate.md": {"rules_formatted", "new_rule"}
+    "style_synthesizer_duplicate.md": {"rules_formatted", "new_rule"},
+    "analogy_generator.md": {"final_lesson", "student_personas", "feedback"},
+    "analogy_evaluator.md": {"final_lesson", "analogies", "student_personas"}
 }
 
 def get_all_prompts():

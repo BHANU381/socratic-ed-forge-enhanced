@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.models.schemas import CourseInput, LessonContract, SectionRequirement, Module, Submodule, ValidationResult, ValidationIssue
 from src.engine.orchestrator import Orchestrator, truncate_running_summary
@@ -139,7 +139,9 @@ def test_retry_limits_and_submodule_status(tmp_path):
     submodule.title = "Submodule 1.1"
     submodule.content_context = "Context"
     
-    status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
     
     # Should stop after 2 patch retries and return failed_blocker
     assert status == "failed_blocker"
@@ -171,7 +173,9 @@ def test_telemetry_structure(tmp_path):
     submodule.title = "Submodule 1.1"
     submodule.content_context = "Context"
     
-    orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
     
     # We should have failure reasons logged
     assert len(orch.telemetry["failure_reasons"]) > 0
@@ -213,7 +217,9 @@ def test_quality_profile_light_runs_evaluator(tmp_path):
     submodule.title = "Submodule 1.1"
     submodule.content_context = "Context"
     
-    status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
     
     # Assert that the semantic evaluator was called
     assert orch.semantic_evaluator.evaluate.call_count > 0
@@ -270,7 +276,9 @@ def test_orchestrator_corrects_headings_on_blocker(tmp_path, monkeypatch):
     submodule.content_context = "Context"
     submodule.topic_material_ids = []
     
-    status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
     
     # The pipeline should succeed because the orchestrator corrected the heading level on the blocker!
     assert status == "approved"

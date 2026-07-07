@@ -47,12 +47,14 @@ Analyze the following draft:
    - `target_words` is preferred target depth, not a hard minimum. Shortfalls between `min_words` and `target_words` must be warnings only.
    - Length alone must not be a blocker.
 7. If the course is non-technical, do NOT force or require code examples.
+8. **Persona Analogies Placeholder**: The 'Persona Analogies' section is compiled in a post-validation phase. If this section contains the literal string '[PLACEHOLDER]' (case-insensitive), you MUST treat it as a valid, approved section and do NOT flag it as empty, missing, or block on it. Do NOT evaluate or block on the word count (min_words or target_words) for the 'Persona Analogies' section if it contains '[PLACEHOLDER]'.
+
 
 ### SEVERITY POLICY (CRITICAL):
 
 **Block only if (Passed = false):**
 1. The lesson is off-topic relative to the Course Topic or Submodule Title.
-2. A required section in the active lesson contract is missing or entirely empty.
+2. A required section in the active lesson contract is missing or entirely empty (excluding the 'Persona Analogies' section if it contains '[PLACEHOLDER]').
 3. Core Idea does not explain the concept or submodule topic.
 4. Lesson Breakdown does not expand the breakdown field.
 5. Practical Walkthrough does not provide practical understanding or step-by-step walkthrough.

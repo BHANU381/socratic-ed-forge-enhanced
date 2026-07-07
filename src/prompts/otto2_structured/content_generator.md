@@ -111,12 +111,7 @@ Every topic lesson MUST STRICTLY follow this structure using specific Markdown h
 
 #### Persona Analogies
 - **Heading**: `#### Persona Analogies` (Level 4 heading)
-- **Content**: Write a distinct, highly detailed analogy explaining the topic for each target context provided under `Target Student Personas`.
-  * For each persona, use the exact `Target Name` provided as a level-5 heading (e.g., `##### Devin`).
-  * Directly below the heading, write at least two detailed explanation paragraphs (aiming for 200 to 300 words per persona context) mapping the technical steps of the topic to the metaphor.
-  * Do NOT output the `Target Context` text or background label inside the generated content section.
-  * You MUST NEVER output the persona names (e.g., do not write "Devin" or "Sarah") anywhere inside the body paragraphs.
-  * Do NOT use the word "analogy" anywhere in the body paragraphs.
+- **Content**: Output ONLY the literal string `[PLACEHOLDER]` directly below the heading. Do NOT write any actual analogies or persona sections.
 
 #### Practical Walkthrough
 - **Heading**: `#### Practical Walkthrough` (Level 4 heading)

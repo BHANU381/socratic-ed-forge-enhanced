@@ -5,8 +5,8 @@
 Draft Content
 
 ### Introduction
-Networking in Python allows your programs to communicate with other computers over the internet or a local network. At its core, it involves sending and receiving data packets between a client—which requests a service—and a server—which provides it. Python simplifies this complex process using built-in libraries like `socket`, making it easier for beginners to build connected applications such as web scrapers, chat clients, or simple API consumers.
+Networking in Python allows your programs to communicate with other computers over a network, such as the internet. By using Python's built-in libraries, you can build tools that fetch data from websites, communicate with servers, or create simple chat applications. In this module, we will explore the fundamentals of how Python handles network connections.
 
 ### Core Concepts
 
-Networking allows Python programs to communicate over networks by exchanging data. This interaction relies on two primary roles: the client, which initiates a request for a service, and the server, which listens for and responds to that request. Python manages these connections using the `socket` library, which provides the necessary tools to establish communication between computers, enabling the creation of applications like chat clients or web scrapers.
+Networking in Python relies on the concept of sockets, which act as endpoints for sending or receiving data. Key components include: 1. IP Addresses: Unique identifiers for devices on a network. 2. Ports: Logical identifiers that allow specific applications to send and receive data. 3. Protocols: Sets of rules, such as HTTP or TCP, that govern how data is formatted and exchanged between computers.

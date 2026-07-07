@@ -95,7 +95,10 @@ def validate_markdown_structure(content: str) -> ValidationResult:
         # Check placeholders
         from src.utils.placeholder_classifier import classify_placeholder
         ctx_strings = [p.original_line for p in context_window[:-1]]
-        res_class = classify_placeholder(line, ctx_strings, in_code_block=parsed.is_inside_fence)
+        if line.strip().lower() == "[placeholder]":
+            res_class = {"is_blocked": False}
+        else:
+            res_class = classify_placeholder(line, ctx_strings, in_code_block=parsed.is_inside_fence)
         if res_class.get("is_blocked"):
             severity = classify_placeholder_occurrence(parsed, context_window[:-1], res_class.get("rule_id"))
             if severity != "allowed":

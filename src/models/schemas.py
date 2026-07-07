@@ -104,6 +104,10 @@ class TelemetryData(BaseModel):
     failure_reasons: List[str] = Field(default_factory=list)
     course_structure: List[Dict[str, Any]] = Field(default_factory=list)
     submodule_telemetry: Dict[str, Dict[str, Dict[str, str]]] = Field(default_factory=dict)
+    analogy_generator_attempts: int = 0
+    analogy_evaluator_status: str = "none"
+    analogy_evaluator_blockers: List[str] = Field(default_factory=list)
+    analogy_fallback_triggered: bool = False
 
 class PatchResult(BaseModel):
     operation: Literal["replace_section", "no_safe_patch"]
