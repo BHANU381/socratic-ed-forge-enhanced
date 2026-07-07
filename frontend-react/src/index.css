@@ -338,3 +338,109 @@ html, body, #root {
     @apply bg-background text-foreground; }
   html {
     @apply font-sans; } }
+
+/* ── VS Code Markdown Rendering Match ──────────────────────────────────────── */
+.prose {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  color: #c9d1d9 !important;
+  line-height: 1.6 !important;
+  font-size: 14px !important;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: #f0f6fc !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  margin-top: 24px !important;
+  margin-bottom: 16px !important;
+}
+
+.prose h1 {
+  font-size: 2em !important;
+  padding-bottom: 0.3em !important;
+  border-bottom: 1px solid #30363d !important;
+}
+
+.prose h2 {
+  font-size: 1.5em !important;
+  padding-bottom: 0.3em !important;
+  border-bottom: 1px solid #30363d !important;
+}
+
+.prose h3 {
+  font-size: 1.25em !important;
+}
+
+.prose h4 {
+  font-size: 1em !important;
+}
+
+.prose h5 {
+  font-size: 0.875em !important;
+  color: #8b949e !important;
+}
+
+.prose p {
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
+  color: #c9d1d9 !important;
+}
+
+.prose code {
+  color: #ff7b72 !important; /* Soft red for inline code */
+  background-color: rgba(110, 118, 129, 0.2) !important;
+  padding: 0.2em 0.4em !important;
+  border-radius: 6px !important;
+  font-family: var(--font-mono) !important;
+  font-size: 85% !important;
+}
+
+/* Remove default backticks from inline code in Tailwind prose */
+.prose code::before, .prose code::after {
+  content: "" !important;
+}
+
+.prose pre {
+  background-color: #161b22 !important; /* VS Code dark background style */
+  border: 1px solid #30363d !important;
+  border-radius: 6px !important;
+  padding: 16px !important;
+  overflow: auto !important;
+  margin-bottom: 16px !important;
+}
+
+.prose pre code {
+  color: #e6edf3 !important;
+  background-color: transparent !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.45 !important;
+}
+
+.prose blockquote {
+  padding: 0 1em !important;
+  color: #8b949e !important;
+  border-left: 0.25em solid #30363d !important;
+  margin: 0 0 16px 0 !important;
+}
+
+.prose ul, .prose ol {
+  margin-top: 0 !important;
+  margin-bottom: 16px !important;
+  padding-left: 2em !important;
+  list-style-position: outside !important;
+}
+
+.prose li {
+  margin-top: 0.25em !important;
+  color: #c9d1d9 !important;
+}
+
+.prose hr {
+  height: 0.25em !important;
+  padding: 0 !important;
+  margin: 24px 0 !important;
+  background-color: #30363d !important;
+  border: 0 !important;
+}

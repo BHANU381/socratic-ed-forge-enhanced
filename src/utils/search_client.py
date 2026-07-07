@@ -2,7 +2,7 @@ import traceback
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from src.utils.logger import log_event
 
 def search_duckduckgo(query: str, max_results: int = 5) -> str:

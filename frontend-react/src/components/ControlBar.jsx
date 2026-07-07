@@ -180,6 +180,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
                   onChange={e => setCodeStyle(e.target.value)}
                   className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
                 >
+                  <option value="none">No Code (none)</option>
                   <option value="progressive_production">Progressive Prod</option>
                   <option value="minimal">Minimal</option>
                   <option value="practical">Practical</option>

@@ -43,6 +43,16 @@
       "target_words": 400
     },
     {
+      "title": "Persona Analogies",
+      "aliases": [
+        "Persona Analogies"
+      ],
+      "required": true,
+      "required_level": 4,
+      "min_words": 100,
+      "target_words": 400
+    },
+    {
       "title": "Practical Walkthrough",
       "aliases": [
         "Practical Walkthrough"

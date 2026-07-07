@@ -381,6 +381,7 @@ class ContentGenerator(AgentBase):
         merged_kwargs.setdefault("evaluation_path", "")
         merged_kwargs.setdefault("tool_stack", "Tools: None\nTech Stack: None")
         merged_kwargs.setdefault("grounding_context", "Grounding Context: Empty")
+        merged_kwargs.setdefault("student_personas", "")
 
         prompt, self.required_headings = load_prompt("content_generator.md", 
                              theme=self.theme,
@@ -765,6 +766,7 @@ class SemanticEvaluator(AgentBase):
         kwargs.setdefault("common_mistakes", "")
         kwargs.setdefault("expert_heuristic", "")
         kwargs.setdefault("evaluation_path", "")
+        kwargs.setdefault("student_personas", "")
 
         prompt, _ = load_prompt("semantic_evaluator.md",
                              theme=self.theme,
@@ -815,6 +817,7 @@ class PatchEditor(AgentBase):
         kwargs.setdefault("common_mistakes", "")
         kwargs.setdefault("expert_heuristic", "")
         kwargs.setdefault("evaluation_path", "")
+        kwargs.setdefault("student_personas", "")
 
         prompt, _ = load_prompt("patch_editor.md",
                              theme=self.theme,

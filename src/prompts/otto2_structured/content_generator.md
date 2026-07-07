@@ -3,6 +3,7 @@ REQUIRED_HEADINGS:
 - ### Hook
 - #### Core Idea
 - #### Lesson Breakdown
+- #### Persona Analogies
 - #### Practical Walkthrough
 - #### Edge Cases
 - #### Common Mistakes
@@ -41,6 +42,16 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Code Example Style: {code_example_style}
 - Explanation Depth: {explanation_depth}
 - Module Position: {module_position}
+- Target Student Personas:
+{student_personas}
+
+### CODE EXAMPLE STYLE DIRECTIONS (FOLLOW STRICTLY)
+Depending on the value of `{code_example_style}`, you must strictly enforce the following rules:
+- **none**: DO NOT generate any programming code blocks (e.g. no ` ```python `, ` ```sql `, ` ```bash `, ` ```html ` code fences). Explain technical workflows, structures, or configurations conceptually using step-by-step paragraphs, bullet points, markdown tables, or ASCII schemas.
+- **minimal**: Write short, focused code blocks showing only the direct concept API/syntax without setup boilerplate.
+- **practical**: Write code blocks reflecting real-world usage, including basic error handling or config steps.
+- **progressive_production**: Write complete, production-aligned code blocks designed to build step-by-step across sections.
+- **production_first**: Generate fully-featured, high-fidelity scripts or templates that are immediately deployable.
 
 ### SPECIFIC TOPIC GUIDANCE (FOLLOW STRICTLY)
 - Topic Concept: {concept}
@@ -92,34 +103,43 @@ Every topic lesson MUST STRICTLY follow this structure using specific Markdown h
 
 #### Core Idea
 - **Heading**: `#### Core Idea` (Level 4 heading)
-- **Content**: Explain the main concept clearly using the topic concept field, course context, module context, and grounding context.
+- **Content**: Explain the main concept clearly using the topic concept field, course context, module context, and grounding context. Write a comprehensive, deep-dive explanation of the concept (minimum of 380 words).
 
 #### Lesson Breakdown
 - **Heading**: `#### Lesson Breakdown` (Level 4 heading)
-- **Content**: Explain the concept in detail, expanding on the topic breakdown field, module context, and course context.
+- **Content**: Explain the concept in detail, expanding on the topic breakdown field `{breakdown}`, module context, and course context (minimum of 150 words). You must address all points specified in the breakdown and add detailed explanations around them.
+
+#### Persona Analogies
+- **Heading**: `#### Persona Analogies` (Level 4 heading)
+- **Content**: Write a distinct, highly detailed analogy explaining the topic for each target context provided under `Target Student Personas`.
+  * For each persona, use the exact `Target Name` provided as a level-5 heading (e.g., `##### Devin`).
+  * Directly below the heading, write at least two detailed explanation paragraphs (aiming for 200 to 300 words per persona context) mapping the technical steps of the topic to the metaphor.
+  * Do NOT output the `Target Context` text or background label inside the generated content section.
+  * You MUST NEVER output the persona names (e.g., do not write "Devin" or "Sarah") anywhere inside the body paragraphs.
+  * Do NOT use the word "analogy" anywhere in the body paragraphs.
 
 #### Practical Walkthrough
 - **Heading**: `#### Practical Walkthrough` (Level 4 heading)
-- **Content**: Provide a student-facing explanation and step-by-step example using the breakdown, action items, and grounding context. It should be a practical learning flow, not an assignment. Do not add quizzes or project submission tasks unless the course JSON explicitly asks for them.
+- **Content**: Provide a student-facing explanation and step-by-step example using the breakdown, action items, and grounding context. It should be a detailed, practical learning flow (minimum of 300 words), not an assignment. Do not add quizzes or project submission tasks unless the course JSON explicitly asks for them.
 
 #### Edge Cases
 - **Heading**: `#### Edge Cases` (Level 4 heading)
-- **Content**: Explain the edge cases in natural teaching language.
+- **Content**: Explain the edge cases in natural teaching language (minimum of 100 words). You MUST explicitly incorporate and explain the specific edge cases listed in the `{edge_cases}` input, and brainstorm/add additional relevant ones to provide complete coverage.
 
 #### Common Mistakes
 - **Heading**: `#### Common Mistakes` (Level 4 heading)
-- **Content**: Warn against common mistakes, rendered as bullets or short explained points.
+- **Content**: Warn against common mistakes, rendered as bullets or short explained points (minimum of 100 words). You MUST explicitly include and explain the specific mistakes provided in `{common_mistakes}`, and brainstorm/add additional typical developer mistakes.
 
 #### Action Items
 - **Heading**: `#### Action Items` (Level 4 heading)
-- **Content**: Render as practical steps the learner can follow.
+- **Content**: Render as practical steps the learner can follow (minimum of 40 words). You MUST explicitly list the action items provided in `{action_items}`, and brainstorm/add additional concrete tasks to reinforce learning.
 
 #### Why It Matters
 - **Heading**: `#### Why It Matters` (Level 4 heading)
-- **Content**: Connect the topic to the module and course goal. Use the evaluation_path and expert_heuristic internally to shape this section, but do not mention their names.
+- **Content**: Connect the topic to the module and course goal (minimum of 80 words). Use the evaluation_path and expert_heuristic internally to shape this section, but do not mention their names.
 
 ### Structural Rules
 1. **Level 3 Heading**: You MUST output exactly ONE level-3 heading (`### Hook: ...`). Do not use any other `###` headings in the topic.
-2. **Level 4 Headings**: The sections `Core Idea`, `Lesson Breakdown`, `Practical Walkthrough`, `Edge Cases`, `Common Mistakes`, `Action Items`, and `Why It Matters` MUST be level-4 headings (`####`).
+2. **Level 4 Headings**: The sections `Core Idea`, `Lesson Breakdown`, `Persona Analogies`, `Practical Walkthrough`, `Edge Cases`, `Common Mistakes`, `Action Items`, and `Why It Matters` MUST be level-4 headings (`####`).
 3. No `##` or `#` headings are allowed inside the topic body.
 4. No fake sections or hallucinated sections.

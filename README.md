@@ -114,11 +114,6 @@ Here is a comprehensive sample `course_input.json` using the modern `CourseStruc
   "course_title": "Introduction to AI Engineering",
   "course_context": "A comprehensive guide on building agentic workflows and deterministic AI pipelines.",
   "duration_weeks": 4,
-  "prompt_theme": "default",
-  "quality_profile": "textbook",
-  "learner_level": "intermediate",
-  "code_example_style": "progressive_production",
-  "explanation_depth": "deep",
   "student_personas": [
     {
       "name": "Alex",
@@ -163,19 +158,75 @@ Here is a comprehensive sample `course_input.json` using the modern `CourseStruc
 }
 ```
 
-### Required vs Optional Fields
+### 📝 Course Input Schema Field Reference
 
-**Required Fields:**
-- `course_title` and `course_context`
-- `modules`: List of modules.
-  - `module_title` and `module_context`
-  - `topics`: List of topics in the module.
-    - `topic_title` and `concept`
+The input configuration JSON consists of three nested layers: **Course Level**, **Module Level**, and **Topic Level**. Below is the detailed schema specification for every field.
 
-**Optional Power Features:**
-- **Course Level:** `duration_weeks`, `student_personas`, `lesson_contract`, `tool_stack`, and stylistic flags (`prompt_theme`, `quality_profile`, `learner_level`, `code_example_style`, `explanation_depth`). Note: These can also be overridden via the UI Dashboard.
-- **Module Level:** `learning_outcomes`, `module_constraints`.
-- **Topic Level:** `breakdown`, `constraints`, `edge_cases`, `action_items`, `common_mistakes`, `evaluation_path`, `expert_heuristic`, `expert_story`, and `reference_guides`.
+---
+
+#### 1. Course Level (Root Level Configuration)
+
+| Field Name | Type | Required / Optional | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `course_title` | `string` | **Required** | None | The official name of the course. |
+| `course_context` | `string` | **Required** | None | Overall course summary, focus area, and target outcomes. |
+| `duration_weeks` | `integer` | Optional | `4` | Expected duration of the curriculum in weeks. |
+| `prompt_theme` | `string` | Optional | `"default"` | Layout style. Options: `"default"` (standard textbook) or `"otto2_structured"` (Hook, Core Idea, Lesson Breakdown, Persona Analogies, Practical Walkthrough, Edge Cases, Common Mistakes, Action Items, Why It Matters). |
+| `quality_profile` | `string` | Optional | `"standard"` | Content generation depth profile. Options: `"standard"` or `"textbook"`. |
+| `learner_level` | `string` | Optional | `"beginner"` | Target audience expertise level. Options: `"beginner"`, `"intermediate"`, or `"advanced"`. |
+| `code_example_style`| `string` | Optional | `"progressive_production"` | Code generation style. Options: `"minimal"`, `"practical"`, `"progressive_production"`, or `"production_first"`. |
+| `explanation_depth` | `string` | Optional | `"balanced"` | Generative detail level. Options: `"concise"`, `"balanced"`, or `"deep"`. |
+| `enable_google_search`| `boolean` | Optional | `true` | Enables/disables DuckDuckGo web search tool fallback. |
+| `student_personas` | `array[object]`| Optional | `[]` | List of target student profile definitions used to construct personalized analogies. (Structure detailed below). |
+| `tool_stack` | `object` | Optional | `None` | Allowed software/libraries stack configuration. (Structure detailed below). |
+| `lesson_contract` | `object` | Optional | `None` | Custom heading and word limits configuration. **Recommendation:** Omit this entirely to let the theme manager auto-load and scale default contracts. |
+| `modules` | `array[object]`| **Required** | `[]` | List of modules comprising the course. |
+
+##### `student_personas` Object Structure
+* `name` (`string`, **Required**): The name of the persona (e.g. `"Sarah"`). Used internally to catalog entries; stripped from user-facing text to maintain anonymity.
+* `context` (`string`, **Required**): Detailed student background, experience, or role (e.g. `"A traditional sysadmin looking to modernize their skillset with cloud-native tools"`).
+
+##### `tool_stack` Object Structure
+* `tools` (`array[string]`, Optional): Specific software, frameworks, or libraries allowed (e.g., `["Docker", "Kubernetes"]`).
+* `tech_stack` (`array[string]`, Optional): Core programming languages or system stacks (e.g., `["Python", "FastAPI"]`).
+
+---
+
+#### 2. Module Level Configuration
+
+| Field Name | Type | Required / Optional | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `module_title` | `string` | **Required** | None | The name of the module (e.g., `"Module 1: Foundations"`). |
+| `module_context` | `string` | **Required** | None | The learning context, goals, and focus for this module. |
+| `learning_outcomes`| `array[string]`| Optional | `[]` | Key learning achievements targeted for the module. |
+| `module_constraints`| `array[string]`| Optional | `[]` | Structural boundaries or exclusions applied to all lessons in the module. |
+| `topics` | `array[object]`| **Required** | `[]` | Sub-level array of topics representing individual lessons. |
+
+---
+
+#### 3. Topic Level Configuration
+
+| Field Name | Type | Required / Optional | Default Value | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `topic_title` | `string` | **Required** | None | Title of the topic / lesson submodule (e.g. `"Application Deployment Workflow"`). |
+| `concept` | `string` | **Required** | None | Core concept, technology description, or theory to explain. |
+| `breakdown` | `string` | Optional | `""` | A structured step-by-step conceptual outline for the lesson text. |
+| `constraints` | `string` | Optional | `""` | Strict rules for the generation (e.g., `"Never use outdated command syntaxes"`). |
+| `edge_cases` | `string` | Optional | `""` | Technical limitations, failure modes, or corner situations to cover. |
+| `action_items` | `array[string]`| Optional | `[]` | Hands-on exercises or task items the student must perform to practice. |
+| `common_mistakes` | `array[string]`| Optional | `[]` | Traps, syntax gotchas, and typical errors the user should avoid. |
+| `evaluation_path` | `string` | Optional | `""` | The checklist criterion used to verify the learner has understood the lesson. |
+| `expert_heuristic` | `string` | Optional | `""` | Actionable advice or rule-of-thumb from a senior engineer. |
+| `expert_story` | `string` | Optional | `None` | Real-world anecdote or scenario context to reinforce learning. |
+| `reference_guides` | `array[string]`| Optional | `None` | External links to official documentation or reference specifications. |
+| `inferred` | `boolean` | Optional | `None` | Internal flag marking if this topic was auto-generated by the planner. |
+| `inference_rationale`| `string` | Optional | `None` | Explanation of why this topic was inferred as a curriculum requirement. |
+| `topic_material_ids`| `array[string]`| Optional | `[]` | File or grounding chunk mappings used in RAG. |
+
+> [!WARNING]
+> **No `"analogy"` Property at Topic Level:** Do not add `"analogy": "..."` inside your topics array. The engine enforces strict schema validations (`extra="forbid"`). Individual topic-level analogies are forbidden because analogies are generated dynamically at the course level using the `student_personas` list.
+
+---
 
 Once uploaded, select your **RPM/TPM limits**, choose your **Learner Level** and **Code Style**, and hit **Start Production**.
 

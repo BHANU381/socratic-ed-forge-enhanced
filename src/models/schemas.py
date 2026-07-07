@@ -71,7 +71,7 @@ class CourseInput(BaseModel):
     lesson_contract: Optional[LessonContract] = None
     quality_profile: QualityProfile = QualityProfile.STANDARD
     learner_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
-    code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
+    code_example_style: Literal["none", "minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
     enable_google_search: Optional[bool] = True
 
@@ -241,7 +241,7 @@ class CourseStructure(StrictBaseModel):
     prompt_theme: str = Field("default", pattern=r"^[a-zA-Z0-9_-]+$")
     quality_profile: QualityProfile = QualityProfile.STANDARD
     learner_level: Literal["beginner", "intermediate", "advanced"] = "beginner"
-    code_example_style: Literal["minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
+    code_example_style: Literal["none", "minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
     student_personas: List[StudentPersona] = Field(default_factory=list)
     lesson_contract: Optional[LessonContract] = None

@@ -7,6 +7,8 @@ Your job is to rewrite a single section of a lesson draft to fix specific valida
 - Learner Level: {learner_level}
 - Target Heading Section: {heading}
 - Patch Mode: {patch_mode}
+- Target Student Personas:
+{student_personas}
 
 Specific topic details to enforce:
 - Topic Breakdown: {breakdown}
@@ -37,6 +39,7 @@ The structured sections for this theme are:
 - ### Hook
 - #### Core Idea
 - #### Lesson Breakdown
+- #### Persona Analogies
 - #### Practical Walkthrough
 - #### Edge Cases
 - #### Common Mistakes

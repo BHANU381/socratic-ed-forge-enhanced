@@ -37,11 +37,11 @@ Your task is to check whether the generated lesson is faithful to the provided s
    - overstate a concept beyond what the source material allows,
    - introduce unsafe engineering advice.
 
-4. Allow references to tools and technologies listed in tool_stack.
+4. Allow references to tools and technologies listed in tool_stack, as well as their direct dependencies or underlying technologies (e.g. allow `git` if `GitHub` is in the tool stack).
 
 5. Allow illustrative local file paths such as `src/components/UserDashboard.tsx`, `package.json`, `tailwind.config.js`, and `tsconfig.json` when used as examples.
 
-6. Flag external URLs, brand names, or vendor-specific claims only if they are not present in the source bundle or tool_stack.
+6. Flag and block external brand names, vendor-specific claims, or competing products that are not present in the source bundle or tool_stack (e.g., if the tool stack lists `Gemini API`, block references to competitors like `OpenAI` or `ChatGPT`, creating a blocker to replace them with `Gemini`).
 
 7. Allow learner-facing placeholders only when they appear inside a clearly labeled template, prompt template, diagnostic prompt, fill-in example, or learner exercise template.
 

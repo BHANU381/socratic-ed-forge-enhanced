@@ -25,6 +25,7 @@ def test_theme_discovery_and_selection(tmp_path):
     assert "Hook" in headings
     assert "Core Idea" in headings
     assert "Lesson Breakdown" in headings
+    assert "Persona Analogies" in headings
     assert "Practical Walkthrough" in headings
     assert "Edge Cases" in headings
     assert "Common Mistakes" in headings
@@ -48,6 +49,9 @@ This is the core concept of the topic. It should explain what we are doing.
 
 #### Lesson Breakdown
 This section lists the conceptual details of the lesson content.
+
+#### Persona Analogies
+This is an analogy tailored for target personas.
 
 #### Practical Walkthrough
 This section contains a step-by-step example.
@@ -169,6 +173,7 @@ def test_semantic_evaluator_snapshot():
     
     # Check visible sections and internal guidance rules
     assert "#### Lesson Breakdown" in content
+    assert "#### Persona Analogies" in content
     assert "#### Practical Walkthrough" in content
     assert "Do not require visible headings for constraints" in content
     assert "Do NOT require old hardcoded 600-word sections" in content
@@ -180,6 +185,7 @@ def test_patch_editor_snapshot():
     
     # Check sections known
     assert "#### Lesson Breakdown" in content
+    assert "#### Persona Analogies" in content
     assert "#### Practical Walkthrough" in content
     assert "Do NOT create headings for constraints" in content
 

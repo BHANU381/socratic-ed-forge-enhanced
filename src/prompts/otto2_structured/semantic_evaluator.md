@@ -11,6 +11,8 @@ Your job is to analyze a generated lesson draft and evaluate it against:
 {lesson_contract}
 - Previously covered concepts (avoid repetition):
 {running_summary}
+- Target Student Personas:
+{student_personas}
 
 Specific topic details to enforce:
 - Topic Breakdown: {breakdown}
@@ -31,6 +33,7 @@ Analyze the following draft:
    - `### Hook`
    - `#### Core Idea`
    - `#### Lesson Breakdown`
+   - `#### Persona Analogies`
    - `#### Practical Walkthrough`
    - `#### Edge Cases`
    - `#### Common Mistakes`

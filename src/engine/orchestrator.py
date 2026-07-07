@@ -356,6 +356,34 @@ class Orchestrator:
         sub_dict = mod_dict.setdefault(sub, {})
         sub_dict[agent] = str(val)
 
+    def _format_student_personas(self) -> str:
+        from src.models.schemas import StudentPersona
+        personas = getattr(self.course, "student_personas", []) or []
+        
+        # Build copy to avoid mutating the original
+        active_personas = list(personas)
+        
+        # Generate default dynamic context
+        course_context = getattr(self.course, "course_context", "") or ""
+        default_context = f"A general learner seeking practical analogies related to: {course_context}."
+        default_persona = StudentPersona(name="Default Student", context=default_context)
+        active_personas.append(default_persona)
+        
+        formatted_list = []
+        for p in active_personas:
+            formatted_list.append(f"- Target Name: {p.name}\n  Target Context: {p.context}")
+        return "\n".join(formatted_list)
+
+    def adjust_contract_word_limits(self, num_personas: int) -> None:
+        if not hasattr(self, "lesson_contract") or not self.lesson_contract:
+            return
+        persona_section = next(
+            (sec for sec in self.lesson_contract.sections if sec.title == "Persona Analogies"),
+            None
+        )
+        if persona_section:
+            persona_section.min_words = 200 * num_personas
+            persona_section.target_words = 350 * num_personas
 
     def load_or_create_manifest(self) -> RunManifest:
         manifest_path = self.session_dir / "run_manifest.json"
@@ -484,6 +512,10 @@ class Orchestrator:
         action_items_str = "\n".join(f"- {item}" for item in action_items) if isinstance(action_items, list) else str(action_items)
         common_mistakes_str = "\n".join(f"- {mistake}" for mistake in common_mistakes) if isinstance(common_mistakes, list) else str(common_mistakes)
 
+        personas_str = self._format_student_personas()
+        num_personas = len(getattr(self.course, "student_personas", []) or []) + 1
+        self.adjust_contract_word_limits(num_personas)
+
         addon_kwargs = {
             "breakdown": breakdown,
             "topic_constraints": constraints,
@@ -491,7 +523,8 @@ class Orchestrator:
             "action_items": action_items_str,
             "common_mistakes": common_mistakes_str,
             "evaluation_path": evaluation_path,
-            "expert_heuristic": expert_heuristic
+            "expert_heuristic": expert_heuristic,
+            "student_personas": personas_str
         }
         
         # Reset per-agent local token counts
