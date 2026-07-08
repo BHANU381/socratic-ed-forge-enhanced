@@ -44,6 +44,12 @@ def truncate_running_summary(summary: str) -> str:
         return "\n".join(target_bullets)
     return summary
 
+def strip_analogies(text: str) -> str:
+    import re
+    # Split case-insensitively on any level-4 heading for Persona Analogies
+    parts = re.split(r'(?i)####\s*Persona\s*Analogies', text)
+    return parts[0].strip()
+
 def normalize_headings_dynamically(draft: str, required_headings: List[str]) -> str:
     if required_headings:
         for req in required_headings:
@@ -686,6 +692,13 @@ class Orchestrator:
         
         update_live_preview(self.session_dir, self.master_file, sub_title, draft, "Drafting")
         
+        # Save draft to individual submodule file for editing/repair
+        import re
+        pos_str = re.sub(r'[^a-zA-Z0-9]', '_', str(module_position)) if module_position else "1_1"
+        pos_str = re.sub(r'_+', '_', pos_str).strip('_')
+        sub_filename = f"submodule_{pos_str}.md"
+        (self.session_dir / sub_filename).write_text(draft, encoding="utf-8")
+        
         # Unified validation, audit, and semantic evaluation repair loop
         from src.validators.markdown_validator import validate_markdown_structure
         from src.validators.lesson_contract_validator import validate_lesson_contract
@@ -701,7 +714,7 @@ class Orchestrator:
             update_telemetry(self.telemetry, session_dir=str(self.session_dir))
             log_event("Deterministic Validator", "Checking document structure and contract constraints...")
             struct_res = validate_markdown_structure(draft)
-            contract_res = validate_lesson_contract(draft, self.lesson_contract)
+            contract_res = validate_lesson_contract(draft, self.lesson_contract, iteration=deterministic_attempts + 1)
             all_issues = struct_res.issues + contract_res.issues
             blockers = [i for i in all_issues if i.severity == "blocker"]
             
@@ -718,16 +731,14 @@ class Orchestrator:
                     draft = normalize_headings_dynamically(draft, req_headings)
                     # Re-run validators
                     struct_res = validate_markdown_structure(draft)
-                    contract_res = validate_lesson_contract(draft, self.lesson_contract)
+                    contract_res = validate_lesson_contract(draft, self.lesson_contract, iteration=deterministic_attempts + 1)
                     all_issues = struct_res.issues + contract_res.issues
                     blockers = [i for i in all_issues if i.severity == "blocker"]
 
             if blockers:
                 if deterministic_attempts >= 2:
                     log_event("Deterministic Validator", f"Failed: Final blockers still present after patches: {blockers[0].message}")
-                    self.update_submodule_telemetry(module_title, sub_title, "deterministic", "F")
-                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-                    break
+                    return self.trigger_manual_repair(submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title)
                     
                 blocker = blockers[0]
                 heading_to_patch = blocker.section or (struct_res.detected_headings[0] if struct_res.detected_headings else "Introduction")
@@ -809,9 +820,7 @@ class Orchestrator:
             if audit_res.get("status") != "APPROVED":
                 if grounding_attempts >= 2:
                     log_event("Grounding Faithfulness Auditor", f"Failed: Blocker still present after 2 attempts.")
-                    self.update_submodule_telemetry(module_title, sub_title, "grounding", "F")
-                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-                    break
+                    return self.trigger_manual_repair(submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title)
                     
                 self.telemetry["grounding_auditor_status"] = "failed"
                 blockers_list = audit_res.get("blockers", [])
@@ -909,9 +918,7 @@ class Orchestrator:
             if blockers:
                 if semantic_attempts >= 2:
                     log_event("Semantic Evaluator", f"Failed: Blocker still present after 2 attempts.")
-                    self.update_submodule_telemetry(module_title, sub_title, "semantic", "F")
-                    update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-                    break
+                    return self.trigger_manual_repair(submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title)
                     
                 blocker = blockers[0]
                 heading_to_patch = blocker.section or (eval_res.detected_headings[0] if eval_res.detected_headings else "Introduction")
@@ -1012,7 +1019,8 @@ class Orchestrator:
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
         
         if blockers:
-            return "failed_blocker", draft
+            return self.trigger_manual_repair(submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title)
+
 
         # Core technical content approved. Let's generate student-persona analogies if required.
         requires_analogies = False
@@ -1043,7 +1051,8 @@ class Orchestrator:
             eval_result = self.analogy_evaluator.evaluate(
                 final_lesson=draft,
                 analogies=analogies_text,
-                student_personas=personas_str
+                student_personas=personas_str,
+                iteration=1
             )
             self.telemetry["analogy_evaluator_status"] = "passed" if eval_result.get("status") == "APPROVED" else "failed"
             self.telemetry["analogy_evaluator_blockers"] = eval_result.get("reasons", [])
@@ -1076,7 +1085,8 @@ class Orchestrator:
                 eval_result = self.analogy_evaluator.evaluate(
                     final_lesson=draft,
                     analogies=analogies_text,
-                    student_personas=personas_str
+                    student_personas=personas_str,
+                    iteration=2
                 )
                 self.telemetry["analogy_evaluator_status"] = "passed" if eval_result.get("status") == "APPROVED" else "failed"
                 self.telemetry["analogy_evaluator_blockers"] = eval_result.get("reasons", [])
@@ -1088,20 +1098,11 @@ class Orchestrator:
                 
             # Fallback if still rejected or failed
             if eval_result.get("status") != "APPROVED":
-                log_event("Analogy Evaluator", "Double validation failure. Falling back to pre-templated analogies.")
+                reasons = eval_result.get("reasons", [])
+                log_event("Analogy Evaluator", f"Double validation failure. Reasons: {reasons}. Preserving last generated analogies.")
                 self.telemetry["analogy_fallback_triggered"] = True
                 self.update_submodule_telemetry(module_title, sub_title, "analogy", "F")
                 update_telemetry(self.telemetry, session_dir=str(self.session_dir))
-                
-                fallback_parts = []
-                active_personas = getattr(self.course, "student_personas", []) or []
-                default_p = StudentPersona(
-                    name="Default Student",
-                    context=f"A general learner seeking practical analogies related to: {self.course.course_context}."
-                )
-                for p in list(active_personas) + [default_p]:
-                    fallback_parts.append(f"##### {p.name}\nLearning {sub_title} is exactly like building a system from its fundamental parts, allowing you to connect raw theory directly to real-world experience.")
-                analogies_text = "\n\n".join(fallback_parts)
                 
             # Robust regex placeholder replacement
             pattern = re.compile(r'\[PLACEHOLDER\]', re.IGNORECASE)
@@ -1120,6 +1121,65 @@ class Orchestrator:
             return "completed_with_warnings", draft
         else:
             return "approved", draft
+
+    def trigger_manual_repair(self, submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title):
+        import sys
+        import os
+        import json
+        is_testing = "pytest" in sys.modules or "unittest" in sys.modules
+        enable_pause = not is_testing or os.environ.get("TEST_BREAKPOINT_PAUSE") == "1"
+        if not enable_pause:
+            return "failed_blocker", draft
+
+        bp_path = self.session_dir / "breakpoint.json"
+        bp_data = {
+            "status": "paused_for_repair",
+            "submodule_title": sub_title,
+            "blockers": [b.message for b in blockers]
+        }
+        with open(bp_path, "w", encoding="utf-8") as f:
+            json.dump(bp_data, f, indent=2)
+            
+        self.telemetry["status"] = "paused_for_repair"
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        
+        log_event("Orchestrator", f"Validation failed. Pipeline paused for manual repair on '{sub_title}'.")
+        
+        import time
+        while True:
+            time.sleep(1)
+            if not bp_path.exists():
+                break
+            try:
+                with open(bp_path, "r", encoding="utf-8") as f:
+                    bp_res = json.load(f)
+            except Exception:
+                continue
+                
+            if bp_res.get("status") == "resolved":
+                resolution = bp_res.get("resolution")
+                try: bp_path.unlink()
+                except FileNotFoundError: pass
+                
+                self.telemetry["status"] = "Running"
+                update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                
+                if resolution == "force_approve":
+                    log_event("Orchestrator", f"User force approved submodule '{sub_title}'.")
+                    return "approved", draft
+                elif resolution == "retry":
+                    import re
+                    pos_str = re.sub(r'[^a-zA-Z0-9]', '_', str(module_position)) if module_position else "1_1"
+                    pos_str = re.sub(r'_+', '_', pos_str).strip('_')
+                    sub_filename = f"submodule_{pos_str}.md"
+                    sub_file_path = self.session_dir / sub_filename
+                    if sub_file_path.exists():
+                        draft = sub_file_path.read_text(encoding="utf-8")
+                        log_event("Orchestrator", f"User edited draft on disk. Reloaded content.")
+                    log_event("Orchestrator", f"User requested validation retry for '{sub_title}'.")
+                    return self.run_submodule_pipeline(submodule, module_title, module_context, running_summary, module_position)
+        
+        return "failed_blocker", draft
 
     def update_agent_tokens(self, agent_name: str, agent):
         current_val = self.telemetry["per_agent_tokens"].get(agent_name, 0)
@@ -1249,6 +1309,10 @@ class Orchestrator:
                     norm_sub_title = normalize_submodule_heading(sub.topic_title)
                     f.write(f"\n## Submodule: {norm_sub_title}\n\n{draft}\n\n")
                     
+                # Also save individual submodule file for editing
+                sub_filename = f"submodule_{m_idx + 1}_{s_idx + 1}.md"
+                (self.session_dir / sub_filename).write_text(draft, encoding="utf-8")
+                    
                 update_live_preview(self.session_dir, self.master_file)
                     
                 # Mark as completed in manifest
@@ -1269,7 +1333,7 @@ class Orchestrator:
                     self.archivist.input_tokens = 0
                     self.archivist.output_tokens = 0
                     summary_text = self.archivist.compress_submodule(
-                        content=draft,
+                        content=strip_analogies(draft),
                         course_info=self.course,
                         module_title=mod.module_title,
                         sub_title=sub.topic_title,

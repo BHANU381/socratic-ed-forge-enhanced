@@ -76,6 +76,8 @@ export function PipelineMatrix({ telemetry }) {
 
                   {/* Submodule Rows */}
                   {submodules.map((sub, subIdx) => {
+                    const isRowPaused = telemetry?.status === 'paused_for_repair' && telemetry?.current_submodule === sub
+                    const sessionId = telemetry?.session_dir?.split(/[\\/]/).pop() || ''
                     const stats = submoduleTelemetry[modTitle]?.[sub] || {}
                     const det = stats.deterministic || '-'
                     const gro = stats.grounding || '-'
@@ -83,26 +85,95 @@ export function PipelineMatrix({ telemetry }) {
                     const ana = stats.analogy || '-'
 
                     return (
-                      <tr 
-                        key={subIdx} 
-                        className="border-b border-zinc-800/30 hover:bg-zinc-900/10 transition-colors"
-                      >
-                        <td className="p-4 pl-8 text-zinc-400 font-medium leading-relaxed">
-                          📄 {sub}
-                        </td>
-                        <td className="p-4 text-center">
-                          {renderBadge(det)}
-                        </td>
-                        <td className="p-4 text-center">
-                          {renderBadge(gro)}
-                        </td>
-                        <td className="p-4 text-center">
-                          {renderBadge(sem)}
-                        </td>
-                        <td className="p-4 text-center">
-                          {renderBadge(ana)}
-                        </td>
-                      </tr>
+                      <React.Fragment key={subIdx}>
+                        <tr 
+                          className="border-b border-zinc-800/30 hover:bg-zinc-900/10 transition-colors"
+                        >
+                          <td className="p-4 pl-8 text-zinc-400 font-medium leading-relaxed">
+                            📄 {sub}
+                          </td>
+                          <td className="p-4 text-center">
+                            {renderBadge(det)}
+                          </td>
+                          <td className="p-4 text-center">
+                            {renderBadge(gro)}
+                          </td>
+                          <td className="p-4 text-center">
+                            {renderBadge(sem)}
+                          </td>
+                          <td className="p-4 text-center">
+                            {renderBadge(ana)}
+                          </td>
+                        </tr>
+                        {isRowPaused && (
+                          <tr className="bg-amber-500/[0.02]">
+                            <td colSpan={5} className="p-6 border-b border-zinc-800/80 bg-zinc-900/10">
+                              <div className="flex flex-col gap-4 max-w-3xl">
+                                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                                  ⚠️ Active Validation Blockers Detected
+                                </div>
+                                <ul className="text-xs text-zinc-300 space-y-1.5 list-disc list-inside bg-zinc-950 p-4 rounded-xl border border-zinc-800/50">
+                                  {telemetry.failure_reasons?.filter(r => r.severity === 'blocker').map((b, idx) => (
+                                    <li key={idx}>{b.message}</li>
+                                  )) || <li className="italic text-zinc-500">Validation issues reported.</li>}
+                                </ul>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Instruct Patch Editor to repair (e.g. 'Use AWS instead')..."
+                                    id={`repair-input-${subIdx}`}
+                                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      const inputVal = document.getElementById(`repair-input-${subIdx}`)?.value || '';
+                                      if (!sessionId) return;
+                                      
+                                      await fetch('/api/sessions/edit', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          session_id: sessionId,
+                                          submodule_filename: 'breakpoint.json',
+                                          content: JSON.stringify({
+                                            status: 'resolved',
+                                            resolution: 'retry',
+                                            user_instructions: inputVal
+                                          })
+                                        })
+                                      });
+                                    }}
+                                    className="text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-zinc-950 px-4 py-2 rounded-xl transition-colors"
+                                  >
+                                    Submit Repair
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      if (!sessionId) return;
+                                      await fetch('/api/sessions/edit', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                          session_id: sessionId,
+                                          submodule_filename: 'breakpoint.json',
+                                          content: JSON.stringify({
+                                            status: 'resolved',
+                                            resolution: 'force_approve',
+                                            user_instructions: ''
+                                          })
+                                        })
+                                      });
+                                    }}
+                                    className="text-xs font-semibold bg-zinc-800 hover:bg-zinc-750 text-zinc-300 border border-zinc-750/50 px-4 py-2 rounded-xl transition-colors"
+                                  >
+                                    Force Pass
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     )
                   })}
                 </React.Fragment>

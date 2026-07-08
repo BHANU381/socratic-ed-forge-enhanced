@@ -1,7 +1,9 @@
 import re
 from src.models.schemas import LessonContract, ValidationResult, ValidationIssue
 
-def validate_lesson_contract(content: str, contract: LessonContract) -> ValidationResult:
+def validate_lesson_contract(content: str, contract: LessonContract, iteration: int = 1) -> ValidationResult:
+    if not contract:
+        return ValidationResult(passed=True, issues=[])
     issues = []
     
     # 1. Parse markdown lines to extract sections and their text
@@ -157,10 +159,24 @@ def validate_lesson_contract(content: str, contract: LessonContract) -> Validati
                         section=req.title
                     ))
                 elif matched_word_count < min_val:
-                    if matched_word_count < (min_val * 0.5) and not has_usefulness:
-                        severity = "blocker"
+                    if iteration == 1:
+                        # 1st run: blocker if < 50% of min_val
+                        if matched_word_count < (min_val * 0.5) and not has_usefulness:
+                            severity = "blocker"
+                        else:
+                            severity = "warning"
+                    elif iteration == 2:
+                        # 2nd run: blocker if < 75% of min_val
+                        if matched_word_count < (min_val * 0.75) and not has_usefulness:
+                            severity = "blocker"
+                        else:
+                            severity = "warning"
                     else:
-                        severity = "warning"
+                        # 3rd run / final check: pass (warning) if >= 70% of min_val, otherwise blocker
+                        if matched_word_count >= (min_val * 0.70):
+                            severity = "warning"
+                        else:
+                            severity = "blocker"
                     issues.append(ValidationIssue(
                         severity=severity,
                         issue_type="section_too_short",

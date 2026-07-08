@@ -3,12 +3,12 @@ REQUIRED_HEADINGS:
 - ### Hook
 - #### Core Idea
 - #### Lesson Breakdown
-- #### Persona Analogies
 - #### Practical Walkthrough
 - #### Edge Cases
 - #### Common Mistakes
 - #### Action Items
 - #### Why It Matters
+- #### Persona Analogies
 ------------------------------------------------------------
 You are an expert academic content creator for a high-end textbook.
 Write a massive, comprehensive, deep-dive academic lesson for the topic '{sub_title}' within the module '{module_title}'.
@@ -42,8 +42,6 @@ The following concepts have already been covered in prior chapters. Do not repea
 - Code Example Style: {code_example_style}
 - Explanation Depth: {explanation_depth}
 - Module Position: {module_position}
-- Target Student Personas:
-{student_personas}
 
 ### CODE EXAMPLE STYLE DIRECTIONS (FOLLOW STRICTLY)
 Depending on the value of `{code_example_style}`, you must strictly enforce the following rules:
@@ -109,10 +107,6 @@ Every topic lesson MUST STRICTLY follow this structure using specific Markdown h
 - **Heading**: `#### Lesson Breakdown` (Level 4 heading)
 - **Content**: Explain the concept in detail, expanding on the topic breakdown field `{breakdown}`, module context, and course context (minimum of 150 words). You must address all points specified in the breakdown and add detailed explanations around them.
 
-#### Persona Analogies
-- **Heading**: `#### Persona Analogies` (Level 4 heading)
-- **Content**: Output ONLY the literal string `[PLACEHOLDER]` directly below the heading. Do NOT write any actual analogies or persona sections.
-
 #### Practical Walkthrough
 - **Heading**: `#### Practical Walkthrough` (Level 4 heading)
 - **Content**: Provide a student-facing explanation and step-by-step example using the breakdown, action items, and grounding context. It should be a detailed, practical learning flow (minimum of 300 words), not an assignment. Do not add quizzes or project submission tasks unless the course JSON explicitly asks for them.
@@ -132,6 +126,10 @@ Every topic lesson MUST STRICTLY follow this structure using specific Markdown h
 #### Why It Matters
 - **Heading**: `#### Why It Matters` (Level 4 heading)
 - **Content**: Connect the topic to the module and course goal (minimum of 80 words). Use the evaluation_path and expert_heuristic internally to shape this section, but do not mention their names.
+
+#### Persona Analogies
+- **Heading**: `#### Persona Analogies` (Level 4 heading)
+- **Content**: Output ONLY the literal string `[PLACEHOLDER]` directly below the heading. Do NOT write any actual analogies or persona sections.
 
 ### Structural Rules
 1. **Level 3 Heading**: You MUST output exactly ONE level-3 heading (`### Hook: ...`). Do not use any other `###` headings in the topic.

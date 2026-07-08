@@ -76,7 +76,9 @@ def test_pipeline_replacing_placeholder_on_success(tmp_path):
     )
     
     # Mocking validator and other agents to bypass main loops
-    with patch.object(orchestrator.generator, "generate", return_value=draft_core), \
+    with patch("src.validators.markdown_validator.validate_markdown_structure", return_value=MagicMock(issues=[])), \
+         patch("src.validators.lesson_contract_validator.validate_lesson_contract", return_value=MagicMock(issues=[])), \
+         patch.object(orchestrator.generator, "generate", return_value=draft_core), \
          patch.object(orchestrator.semantic_evaluator, "evaluate", return_value=MagicMock(issues=[])), \
          patch.object(orchestrator.grounding_auditor, "audit_grounding", return_value={"status": "APPROVED"}):
          
@@ -116,7 +118,9 @@ def test_pipeline_triggering_repair_and_fallback(tmp_path):
         action_items=["Item 1"]
     )
 
-    with patch.object(orchestrator.generator, "generate", return_value=draft_core), \
+    with patch("src.validators.markdown_validator.validate_markdown_structure", return_value=MagicMock(issues=[])), \
+         patch("src.validators.lesson_contract_validator.validate_lesson_contract", return_value=MagicMock(issues=[])), \
+         patch.object(orchestrator.generator, "generate", return_value=draft_core), \
          patch.object(orchestrator.semantic_evaluator, "evaluate", return_value=MagicMock(issues=[])), \
          patch.object(orchestrator.grounding_auditor, "audit_grounding", return_value={"status": "APPROVED"}):
 
@@ -129,8 +133,8 @@ def test_pipeline_triggering_repair_and_fallback(tmp_path):
          # Double failure triggers fallback
          assert status == "approved"
          assert "[PLACEHOLDER]" not in compiled_result
-         # Verify fallback pre-templated text is present
-         assert "Learning Cloud is exactly like building a system from its fundamental parts" in compiled_result
+         # Verify the last generated custom analogy text is preserved
+         assert "Bad analogies content." in compiled_result
 
 def test_telemetry_keys_exist(tmp_path):
     mock_course = MagicMock()
@@ -168,7 +172,9 @@ def test_telemetry_updated_on_success(tmp_path):
         action_items=["Item 1"]
     )
     
-    with patch.object(orchestrator.generator, "generate", return_value=draft_core), \
+    with patch("src.validators.markdown_validator.validate_markdown_structure", return_value=MagicMock(issues=[])), \
+         patch("src.validators.lesson_contract_validator.validate_lesson_contract", return_value=MagicMock(issues=[])), \
+         patch.object(orchestrator.generator, "generate", return_value=draft_core), \
          patch.object(orchestrator.semantic_evaluator, "evaluate", return_value=MagicMock(issues=[])), \
          patch.object(orchestrator.grounding_auditor, "audit_grounding", return_value={"status": "APPROVED"}):
          
@@ -207,7 +213,9 @@ def test_telemetry_updated_on_fallback(tmp_path):
         action_items=["Item 1"]
     )
     
-    with patch.object(orchestrator.generator, "generate", return_value=draft_core), \
+    with patch("src.validators.markdown_validator.validate_markdown_structure", return_value=MagicMock(issues=[])), \
+         patch("src.validators.lesson_contract_validator.validate_lesson_contract", return_value=MagicMock(issues=[])), \
+         patch.object(orchestrator.generator, "generate", return_value=draft_core), \
          patch.object(orchestrator.semantic_evaluator, "evaluate", return_value=MagicMock(issues=[])), \
          patch.object(orchestrator.grounding_auditor, "audit_grounding", return_value={"status": "APPROVED"}):
          

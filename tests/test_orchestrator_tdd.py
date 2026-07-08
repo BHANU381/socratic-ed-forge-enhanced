@@ -134,6 +134,7 @@ def test_retry_limits_and_submodule_status(tmp_path):
     
     # Mock patch editor
     orch.patch_editor.edit_patch = MagicMock(return_value="# Intro\nPatched content")
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
     
     submodule = MagicMock()
     submodule.title = "Submodule 1.1"
@@ -168,6 +169,7 @@ def test_telemetry_structure(tmp_path):
         issues=[ValidationIssue(severity="blocker", issue_type="unclosed_fence", message="unclosed")]
     ))
     orch.patch_editor.edit_patch = MagicMock(return_value="# Intro\nPatched content")
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
     
     submodule = MagicMock()
     submodule.title = "Submodule 1.1"
@@ -212,6 +214,7 @@ def test_quality_profile_light_runs_evaluator(tmp_path):
     
     # Mock semantic evaluator
     orch.semantic_evaluator.evaluate = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
     
     submodule = MagicMock()
     submodule.title = "Submodule 1.1"
@@ -270,6 +273,7 @@ def test_orchestrator_corrects_headings_on_blocker(tmp_path, monkeypatch):
     monkeypatch.setattr(cv, "validate_lesson_contract", MagicMock(return_value=res_pass))
     
     orch.semantic_evaluator.evaluate = MagicMock(return_value=res_pass)
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
     
     submodule = MagicMock()
     submodule.topic_title = "Submodule 1.1"
@@ -283,4 +287,126 @@ def test_orchestrator_corrects_headings_on_blocker(tmp_path, monkeypatch):
     # The pipeline should succeed because the orchestrator corrected the heading level on the blocker!
     assert status == "approved"
     assert "### Introduction" in final_draft
+
+
+def test_pipeline_breakpoint_pause_resolve(tmp_path, monkeypatch):
+    course_data = {
+        "course_name": "Test Breakpoint",
+        "topic": "Testing",
+        "duration_weeks": 1,
+        "modules": []
+    }
+    course_input = CourseInput(**course_data)
+    orch = Orchestrator(course_input, session_dir=tmp_path)
+    monkeypatch.setenv("TEST_BREAKPOINT_PAUSE", "1")
+    
+    # Mock validators to return failures
+    res_fail = ValidationResult(
+        passed=False,
+        issues=[ValidationIssue(severity="blocker", issue_type="unclosed_fence", message="unclosed", section="Core Idea")]
+    )
+    
+    from src.validators import markdown_validator
+    monkeypatch.setattr(markdown_validator, "validate_markdown_structure", MagicMock(return_value=res_fail))
+    
+    # Mock sleep to simulate user resolving the breakpoint file
+    import time
+    def mock_sleep(seconds):
+        bp_file = tmp_path / "breakpoint.json"
+        assert bp_file.exists()
+        bp_data = json.loads(bp_file.read_text())
+        assert bp_data["status"] == "paused_for_repair"
+        
+        # User resolves by selecting force_approve
+        bp_data["status"] = "resolved"
+        bp_data["resolution"] = "force_approve"
+        bp_file.write_text(json.dumps(bp_data))
+        
+    monkeypatch.setattr(time, "sleep", mock_sleep)
+    
+    submodule = MagicMock()
+    submodule.topic_title = "Submodule 1.1"
+    submodule.content_context = "Context"
+    submodule.topic_material_ids = []
+    
+    # Mock generator and validators to run without calling LLM APIs
+    orch.generator.generate = MagicMock(return_value="Draft text")
+    orch.semantic_evaluator.evaluate = MagicMock(return_value=res_fail)
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
+    
+    from src.models.schemas import PatchResult
+    orch.patch_editor.edit_patch = MagicMock(return_value=PatchResult(
+        operation="no_safe_patch",
+        target_heading="Core Idea",
+        replacement_markdown="",
+        reason="Mocked fail"
+    ))
+    
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+        
+    # The pipeline should return "approved" due to user's force_approve choice
+    assert status == "approved"
+
+
+def test_analogy_double_validation_failure_preserves_generated_analogies(tmp_path):
+    from src.models.schemas import CourseInput, StudentPersona, SectionRequirement, LessonContract
+    from src.validators.markdown_validator import ValidationResult
+    
+    course = CourseInput(
+        course_name="course-1",
+        topic="Topic",
+        duration_weeks=4,
+        modules=[],
+        student_personas=[StudentPersona(name="Student 1", context="A student interested in baking.")]
+    )
+    
+    orch = Orchestrator(course, session_dir=tmp_path)
+    orch.lesson_contract = LessonContract(
+        sections=[SectionRequirement(title="Persona Analogies")]
+    )
+    
+    # Mock technical draft generator & validators to pass
+    orch.generator.generate = MagicMock(return_value="### Technical Content\n[PLACEHOLDER]")
+    orch.generator.required_headings = []
+    
+    from src.validators import markdown_validator
+    import src.validators.lesson_contract_validator as cv
+    markdown_validator.validate_markdown_structure = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    cv.validate_lesson_contract = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    orch.grounding_auditor.audit_grounding = MagicMock(return_value={"status": "APPROVED"})
+    orch.semantic_evaluator.evaluate = MagicMock(return_value=ValidationResult(passed=True, issues=[]))
+    
+    # Mock analogy agent to return generated analogies, and evaluator to fail
+    orch.analogy_generator.generate = MagicMock(return_value="##### Student 1\nThis is the custom generated analogy text for Student 1.")
+    orch.analogy_evaluator.evaluate = MagicMock(return_value={"status": "REJECTED", "reasons": ["Analogy too short"]})
+    
+    submodule = MagicMock()
+    submodule.title = "Submodule 1.1"
+    submodule.content_context = "Context"
+    
+    with patch("src.engine.orchestrator.search_duckduckgo", return_value="Mocked search context"), \
+         patch("src.engine.orchestrator.update_telemetry"):
+        status, final_draft = orch.run_submodule_pipeline(submodule, "Module 1", "Module Context")
+        
+    assert status == "approved"
+    assert orch.telemetry["analogy_fallback_triggered"] is True
+    # Telemetry should be marked as "F" (failed)
+    assert orch.telemetry["submodule_telemetry"]["Module 1"]["Submodule 1.1"]["analogy"] == "F"
+    # The final draft should contain the generated analogy, NOT the default fallback text
+    assert "This is the custom generated analogy text for Student 1." in final_draft
+    assert "Learning Submodule 1.1 is exactly like building a system" not in final_draft
+
+
+def test_strip_analogies():
+    from src.engine.orchestrator import strip_analogies
+    text = "### Hook: Hello\n#### Core Idea\nSome technical content\n#### Persona Analogies\n##### Student 1\nAnalogy text"
+    cleaned = strip_analogies(text)
+    assert "Persona Analogies" not in cleaned
+    assert "Analogy text" not in cleaned
+    assert "Core Idea" in cleaned
+
+
+
 

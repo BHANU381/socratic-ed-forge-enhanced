@@ -5,6 +5,7 @@ import { ControlBar }     from './components/ControlBar.jsx'
 import { AuditAlert }     from './components/AuditAlert.jsx'
 import { PreviewPanel }   from './components/PreviewPanel.jsx'
 import { PipelineMatrix } from './components/PipelineMatrix.jsx'
+import { HistoryDashboard } from './components/HistoryDashboard.jsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
@@ -121,17 +122,24 @@ export default function App() {
                 >
                   📊 Pipeline Matrix
                 </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'history' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                >
+                  ⏳ Generation History
+                </button>
               </div>
             </div>
 
-            {/* Panel Content Area */}
             <div className="flex-1 overflow-hidden relative">
               {activeTab === 'preview' ? (
-                <PreviewPanel preview={preview} isLive={isLive} />
-              ) : (
+                <PreviewPanel preview={preview} isLive={isLive} telemetry={telemetry} />
+              ) : activeTab === 'matrix' ? (
                 <div className="w-full h-full overflow-auto p-8 custom-scrollbar">
                   <PipelineMatrix telemetry={telemetry} />
                 </div>
+              ) : (
+                <HistoryDashboard />
               )}
             </div>
           </div>

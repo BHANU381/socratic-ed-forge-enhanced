@@ -21,8 +21,8 @@ def test_grounding_auditor_prompts_contain_tool_rules():
         prompt = mock_run.call_args[0][0]
         assert "git" in prompt.lower()
         assert "github" in prompt.lower()
-        assert "openai" in prompt.lower()
-        assert "gemini" in prompt.lower()
+        assert "competitors" in prompt.lower()
+        assert "brand names" in prompt.lower()
 
 
 def test_grounding_auditor_failure_on_competitor_tools():

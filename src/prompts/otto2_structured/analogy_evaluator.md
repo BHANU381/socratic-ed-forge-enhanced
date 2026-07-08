@@ -17,7 +17,9 @@ You are a strict educational quality auditor. Your task is to evaluate the gener
 1. **Headings**: Does every active persona have a matching `##### [Persona Name]` level-5 heading? (e.g. `##### Devin`).
 2. **Name Leaks**: Are the body paragraphs of the analogies completely free of the persona names? (e.g., the name "Devin" must never appear under the `##### Devin` section).
 3. **Banned Words**: Does the text avoid using the word "analogy" or "analogies" in the body paragraphs?
-4. **Length**: Is each persona's analogy detailed enough (at least 150 words per persona)?
+4. **Length**: Is each persona's analogy detailed enough based on the current evaluation iteration ({iteration})?
+   - If iteration is 1: reject only if any persona's analogy is less than 100 words.
+   - If iteration is 2 (final retry): approve if each persona's analogy is at least 140-150 words.
 
 You must output ONLY a valid JSON object matching the AnalogyEvaluatorResponse schema:
 ```json

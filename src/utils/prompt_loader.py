@@ -47,4 +47,5 @@ def load_prompt(filename: str, theme: str = "default", **kwargs) -> Tuple[str, L
     # Any placeholders in the markdown not provided in kwargs will cause a KeyError.
     kwargs.setdefault("tool_stack", "Tools: None\nTech Stack: None")
     kwargs.setdefault("grounding_context", "Grounding Context: Empty")
+    kwargs.setdefault("iteration", "1")
     return template.format(**kwargs), required_headings

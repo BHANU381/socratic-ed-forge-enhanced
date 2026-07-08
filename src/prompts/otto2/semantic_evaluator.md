@@ -38,10 +38,7 @@ Analyze the following draft:
    - 30-40 minute lesson depth
    - 600-word sections as hard blockers (unless below min_words safety floor and not useful)
 3. **If deterministic validation has passed, assume the structural contract is valid.** Do NOT create a semantic blocker for heading hierarchy, heading level, required heading order, or section nesting.
-4. **target_words vs min_words**:
-   - `min_words` represents the absolute safety floor. Do not fail a section unless it is below `min_words` and NOT useful.
-   - `target_words` is preferred target depth, not a hard minimum. Shortfalls between `min_words` and `target_words` must be warnings only.
-   - Length alone must not be a blocker.
+4. Do NOT check, calculate, or block on minimum word counts (min_words) or target word counts (target_words). Word count validation is handled deterministically by a separate system validator. Never fail a lesson or create a blocker because a section is too short or doesn't meet word counts.
 5. If the course is non-technical, do NOT force or require code examples.
 
 ### SEVERITY POLICY (CRITICAL):

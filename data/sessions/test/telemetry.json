@@ -1,7 +1,7 @@
 {
     "status": "Initializing",
-    "current_agent": "None",
+    "current_agent": "Deterministic Validator",
     "progress_percent": 0,
-    "input_tokens": 1026,
-    "output_tokens": 270,
+    "input_tokens": 1033,
+    "output_tokens": 367,
     "total_tokens": 

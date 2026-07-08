@@ -343,6 +343,68 @@ def clear_logs():
     except FileNotFoundError: pass
     return JSONResponse({"status": "cleared"})
 
+
+from pydantic import BaseModel
+
+class EditSessionPayload(BaseModel):
+    session_id: str
+    submodule_filename: str
+    content: str
+
+@app.get("/api/sessions")
+def get_sessions():
+    sessions = []
+    if OUTPUT_DIR.exists():
+        for p in OUTPUT_DIR.iterdir():
+            if p.is_dir():
+                manifest_path = p / "run_manifest.json"
+                metadata = {}
+                if manifest_path.exists():
+                    try:
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            metadata = json.load(f)
+                    except Exception:
+                        pass
+                sessions.append({
+                    "session_id": p.name,
+                    "metadata": metadata
+                })
+    return JSONResponse({"sessions": sessions})
+
+@app.post("/api/sessions/edit")
+def edit_session(payload: EditSessionPayload):
+    if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    if ".." in payload.submodule_filename or "/" in payload.submodule_filename or "\\" in payload.submodule_filename:
+        raise HTTPException(status_code=400, detail="Invalid submodule_filename")
+        
+    session_dir = OUTPUT_DIR / payload.session_id
+    if not session_dir.exists() or not session_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Session directory not found")
+        
+    file_path = session_dir / payload.submodule_filename
+    try:
+        file_path.write_text(payload.content, encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
+        
+    return JSONResponse({"status": "updated"})
+
+@app.get("/api/sessions/{session_id}/preview")
+def get_session_preview(session_id: str):
+    if ".." in session_id or "/" in session_id or "\\" in session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    session_dir = OUTPUT_DIR / session_id
+    if not session_dir.exists() or not session_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    for f in session_dir.glob("*.md"):
+        if f.name != "live_preview.md" and f.name != "breakpoint.json":
+            return JSONResponse({"content": f.read_text(encoding="utf-8"), "filename": f.name})
+            
+    return JSONResponse({"content": "", "filename": ""})
+
+
 # ── SSE Stream ────────────────────────────────────────────────────────────────
 @app.get("/api/stream")
 async def stream(interval: float = 1.5):

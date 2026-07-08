@@ -42,10 +42,7 @@ Analyze the following draft:
 3. **Do not require visible headings for constraints, evaluation_path, expert_heuristic, or module_constraints.** These are internal guidance fields only and must NOT be rendered as headings. Do not fail the evaluation because these headings are missing.
 4. Do NOT require old hardcoded 600-word sections or 30-40 minute lesson depth. Use target_words vs min_words from the contract.
 5. **If deterministic validation has passed, assume the structural contract is valid.** Do NOT create a semantic blocker for heading hierarchy, heading level, required heading order, or section nesting.
-6. **target_words vs min_words**:
-   - `min_words` represents the absolute safety floor. Do not fail a section unless it is below `min_words` and NOT useful.
-   - `target_words` is preferred target depth, not a hard minimum. Shortfalls between `min_words` and `target_words` must be warnings only.
-   - Length alone must not be a blocker.
+6. Do NOT check, calculate, or block on minimum word counts (min_words) or target word counts (target_words). Word count validation is handled deterministically by a separate system validator. Never fail a lesson or create a blocker because a section is too short or doesn't meet word counts.
 7. If the course is non-technical, do NOT force or require code examples.
 8. **Persona Analogies Placeholder**: The 'Persona Analogies' section is compiled in a post-validation phase. If this section contains the literal string '[PLACEHOLDER]' (case-insensitive), you MUST treat it as a valid, approved section and do NOT flag it as empty, missing, or block on it. Do NOT evaluate or block on the word count (min_words or target_words) for the 'Persona Analogies' section if it contains '[PLACEHOLDER]'.
 

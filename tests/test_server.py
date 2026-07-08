@@ -160,3 +160,64 @@ def test_start_pipeline_with_custom_controls(tmp_path, monkeypatch):
     
     # Verify RUN_TYPE env is passed as resume_existing_run
     assert captured_env.get("RUN_TYPE") == "resume_existing_run"
+
+
+def test_api_sessions_list(tmp_path, monkeypatch):
+    # Mock OUTPUT_DIR in backend.server to use tmp_path
+    monkeypatch.setattr("backend.server.OUTPUT_DIR", tmp_path)
+    
+    # Create a dummy session folder with a manifest
+    session_dir = tmp_path / "session_20260707_160810"
+    session_dir.mkdir()
+    manifest_file = session_dir / "run_manifest.json"
+    manifest_data = {
+        "course_name": "Enterprise AI",
+        "prompt_theme": "otto2_structured",
+        "completion_rate": 85
+    }
+    manifest_file.write_text(json.dumps(manifest_data))
+    
+    response = client.get("/api/sessions")
+    assert response.status_code == 200
+    sessions = response.json().get("sessions", [])
+    assert len(sessions) == 1
+    assert sessions[0]["session_id"] == "session_20260707_160810"
+    assert sessions[0]["metadata"]["course_name"] == "Enterprise AI"
+
+
+def test_api_sessions_edit(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.server.OUTPUT_DIR", tmp_path)
+    
+    session_dir = tmp_path / "session_20260707_160810"
+    session_dir.mkdir()
+    
+    submodule_file = session_dir / "submodule_1_1.md"
+    submodule_file.write_text("Original Draft Content")
+    
+    edit_payload = {
+        "session_id": "session_20260707_160810",
+        "submodule_filename": "submodule_1_1.md",
+        "content": "Edited Draft Content"
+    }
+    
+    response = client.post("/api/sessions/edit", json=edit_payload)
+    assert response.status_code == 200
+    assert response.json().get("status") == "updated"
+    assert submodule_file.read_text() == "Edited Draft Content"
+
+
+def test_api_sessions_preview(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.server.OUTPUT_DIR", tmp_path)
+    
+    session_dir = tmp_path / "session_20260707_160810"
+    session_dir.mkdir()
+    
+    textbook_file = session_dir / "Enterprise_AI.md"
+    textbook_file.write_text("Full Textbook Markdown Content", encoding="utf-8")
+    
+    response = client.get("/api/sessions/session_20260707_160810/preview")
+    assert response.status_code == 200
+    assert response.json().get("filename") == "Enterprise_AI.md"
+    assert response.json().get("content") == "Full Textbook Markdown Content"
+
+

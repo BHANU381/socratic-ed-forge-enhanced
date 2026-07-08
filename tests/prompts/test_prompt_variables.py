@@ -15,7 +15,7 @@ EXPECTED_KWARGS = {
     "style_synthesizer_rule.md": {"critique", "correction"},
     "style_synthesizer_duplicate.md": {"rules_formatted", "new_rule"},
     "analogy_generator.md": {"final_lesson", "student_personas", "feedback"},
-    "analogy_evaluator.md": {"final_lesson", "analogies", "student_personas"}
+    "analogy_evaluator.md": {"final_lesson", "analogies", "student_personas", "iteration"}
 }
 
 def get_all_prompts():
