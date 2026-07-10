@@ -297,7 +297,7 @@ def test_pipeline_breakpoint_pause_resolve(tmp_path, monkeypatch):
         "modules": []
     }
     course_input = CourseInput(**course_data)
-    orch = Orchestrator(course_input, session_dir=tmp_path)
+    orch = Orchestrator(course_input, session_dir=tmp_path, interactive=True)
     monkeypatch.setenv("TEST_BREAKPOINT_PAUSE", "1")
     
     # Mock validators to return failures
@@ -408,5 +408,124 @@ def test_strip_analogies():
     assert "Core Idea" in cleaned
 
 
+def test_running_summary_serialization(tmp_path):
+    from src.engine.orchestrator import Orchestrator
+    from src.models.schemas import CourseInput
 
+    session_dir = tmp_path / "session_test_serialization"
+    session_dir.mkdir()
+
+    # Create dummy running_summary.md to simulate resume
+    summary_file = session_dir / "running_summary.md"
+    summary_file.write_text("- Submodule 1: Test Summary", encoding="utf-8")
+
+    course = CourseInput(
+        course_name="test-course",
+        topic="Topic",
+        duration_weeks=1,
+        modules=[]
+    )
+
+    # Initialize orchestrator with resume
+    orch = Orchestrator(course, session_dir=session_dir, run_type="resume_existing_run")
+    
+    assert orch.load_running_summary() == "- Submodule 1: Test Summary"
+
+
+
+def test_deduplicated_submodule_filenames():
+    import re
+    # We will verify the parsing regex matching we planned
+    module_position = "Module 2/12, Submodule 3/5"
+    match = re.search(r'(?i)Module\s+(\d+).*?Submodule\s+(\d+)', module_position)
+    assert match is not None
+    assert match.group(1) == "2"
+    assert match.group(2) == "3"
+
+
+def test_module_pause_gate(tmp_path, monkeypatch):
+    from src.engine.orchestrator import Orchestrator
+    from src.models.schemas import CourseInput
+    import json
+    
+    session_dir = tmp_path / "session_test_pause_gate"
+    session_dir.mkdir()
+    
+    course = CourseInput(
+        course_name="test-course",
+        topic="Topic",
+        duration_weeks=1,
+        modules=[]
+    )
+    
+    orch = Orchestrator(course, session_dir=session_dir, interactive=True)
+    
+    pause_file = session_dir / "module_pause.json"
+    
+    def mock_sleep(seconds):
+        if pause_file.exists():
+            with open(pause_file, "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                data["status"] = "approved"
+                f.seek(0)
+                json.dump(data, f, indent=2)
+                f.truncate()
+                
+    import time
+    monkeypatch.setattr(time, "sleep", mock_sleep)
+    monkeypatch.setenv("TEST_MODULE_PAUSE", "1")
+    
+    class DummyMod:
+        module_title = "Test Module"
+        
+    orch.trigger_module_pause_gate(0, DummyMod())
+    assert not pause_file.exists()
+
+
+def test_compile_master_file(tmp_path):
+    from src.engine.orchestrator import compile_master_file
+    from src.models.schemas import CourseInput, Module, Submodule, normalize_course_input
+    
+    session_dir = tmp_path / "session_test_compile"
+    session_dir.mkdir()
+    
+    course_in = CourseInput(
+        course_name="Test Enterprise Course",
+        topic="Enterprise Architecting",
+        duration_weeks=4,
+        modules=[
+            Module(
+                title="Introduction to Systems",
+                module_context="Context",
+                submodules=[
+                    Submodule(title="System Design Basics", content_context="basics")
+                ]
+            )
+        ]
+    )
+    course = normalize_course_input(course_in.model_dump())
+    
+    # Create submodule file on disk
+    sub_file = session_dir / "submodule_1_1.md"
+    sub_file.write_text("Submodule content here.", encoding="utf-8")
+    
+    master_file = session_dir / "Test_Enterprise_Course.md"
+    compile_master_file(session_dir, master_file, course)
+    
+    assert master_file.exists()
+    content = master_file.read_text(encoding="utf-8")
+    assert "Test Enterprise Course" in content
+    assert "Submodule content here." in content
+
+def test_review_granularity_normalization():
+    from src.models.schemas import CourseInput, normalize_course_input
+    course_in = CourseInput(
+        course_name="Test Granularity Course",
+        topic="Granularity",
+        duration_weeks=1,
+        modules=[],
+        review_granularity="submodule"
+    )
+    course = normalize_course_input(course_in.model_dump())
+    assert course.review_granularity == "submodule"
 

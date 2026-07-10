@@ -28,7 +28,7 @@
   --text-primary: #F1F5F9;
   --text-secondary:#CBD5E1;
   --text-muted:   #64748B;
-  --font-sans:    'Inter', -apple-system, sans-serif;
+  --font-sans:    'Geist Variable', 'Inter', -apple-system, sans-serif;
   --font-mono:    'Fira Code', 'Cascadia Code', monospace;
   --radius: 0.625rem;
   --radius-sm:    6px;
@@ -443,4 +443,112 @@ html, body, #root {
   margin: 24px 0 !important;
   background-color: #30363d !important;
   border: 0 !important;
+}
+
+/* Premium Staging & Selection Highlight Classes */
+.staged-highlight {
+  border-bottom: 2px dashed #f59e0b; /* amber-500 */
+  background-color: rgba(245, 158, 11, 0.08); /* amber-500/8 */
+  padding: 1px 2px;
+  border-radius: 4px;
+  cursor: help;
+  position: relative;
+  display: inline;
+}
+
+.staged-highlight:hover::after {
+  content: attr(data-instruction);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #18181b; /* zinc-900 */
+  border: 1px solid #27272a; /* zinc-800 */
+  color: #f4f4f5; /* zinc-100 */
+  font-size: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+  z-index: 100;
+}
+
+.active-selection-highlight {
+  background-color: rgba(56, 189, 248, 0.15); /* sky-400/15 */
+  border-bottom: 2px solid #38bdf8; /* sky-400 */
+  padding: 1px 2px;
+  border-radius: 4px;
+  display: inline;
+}
+
+/* Styled inline remove button for queued comments */
+.remove-staged-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  font-size: 10px;
+  line-height: 1;
+  color: #a1a1aa; /* zinc-400 */
+  background-color: #27272a; /* zinc-800 */
+  border: 1px solid #3f3f46; /* zinc-700 */
+  border-radius: 9999px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 100ms ease;
+  user-select: none;
+}
+
+.remove-staged-btn:hover {
+  color: #ef4444; /* red-500 */
+  background-color: #450a0a; /* red-950/20 */
+  border-color: #991b1b; /* red-800 */
+  transform: scale(1.1);
+}
+
+/* Force selections to remain visible with sky highlight color even when input focuses */
+.preview-content ::selection {
+  background-color: rgba(56, 189, 248, 0.25) !important; /* sky-400/25 */
+  color: inherit !important;
+}
+
+/* CSS Custom Highlight API styles for multi-paragraph persistent selections */
+::highlight(user-selection) {
+  background-color: rgba(56, 189, 248, 0.25) !important;
+  color: inherit !important;
+}
+
+/* Accent highlight for enqueued selections inside staged paragraph cards */
+.staged-inner-highlight {
+  background-color: rgba(245, 158, 11, 0.16) !important; /* amber-500/16 */
+  border-bottom: 2px dashed #f59e0b !important; /* amber-500 */
+  padding: 1px 2px;
+  border-radius: 4px;
+}
+
+/* Force interactive input elements to remain selectable and clickable under parent select-none locks */
+.preview-content input,
+.preview-content textarea,
+.preview-content button {
+  user-select: auto !important;
+  pointer-events: auto !important;
+}
+
+/* Custom inline diff layout tags */
+.diff-deleted {
+  text-decoration: line-through !important;
+  color: #ef4444 !important; /* red-500 */
+  background-color: rgba(239, 68, 68, 0.15) !important; /* red-500/15 */
+  padding: 1px 3px;
+  border-radius: 4px;
+}
+
+.diff-inserted {
+  text-decoration: none !important;
+  color: #10b981 !important; /* emerald-500 */
+  background-color: rgba(16, 185, 129, 0.15) !important; /* emerald-500/15 */
+  padding: 1px 3px;
+  border-radius: 4px;
 }

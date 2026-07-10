@@ -8,7 +8,7 @@ import { PipelineMatrix } from './components/PipelineMatrix.jsx'
 import { HistoryDashboard } from './components/HistoryDashboard.jsx'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, BookOpen, BarChart3, History } from 'lucide-react'
 
 export default function App() {
   const { isRunning, pid, telemetry, logs, preview, isLive, connected } = useStream()
@@ -49,7 +49,7 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="relative h-screen w-full overflow-hidden bg-zinc-950 text-zinc-50 flex flex-col font-sans">
+      <div className="relative h-[100dvh] w-full overflow-hidden bg-zinc-950 text-zinc-50 flex flex-col font-sans">
         {/* Top bar */}
         <header className="flex-shrink-0 flex items-center gap-4 px-6 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50 z-20">
           <button 
@@ -109,24 +109,27 @@ export default function App() {
           <div className="flex-1 flex flex-col overflow-hidden bg-zinc-950 relative z-0 min-w-0">
             {/* Tabs Header */}
             <div className="flex-shrink-0 flex items-center justify-between border-b border-zinc-800/50 bg-zinc-950 px-6 h-12">
-              <div className="flex gap-4">
+              <div className="flex gap-6">
                 <button
                   onClick={() => setActiveTab('preview')}
-                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'preview' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center gap-1.5 ${activeTab === 'preview' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  📖 Textbook Preview
+                  <BookOpen className="w-3.5 h-3.5" />
+                  Textbook Preview
                 </button>
                 <button
                   onClick={() => setActiveTab('matrix')}
-                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'matrix' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center gap-1.5 ${activeTab === 'matrix' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  📊 Pipeline Matrix
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  Pipeline Matrix
                 </button>
                 <button
                   onClick={() => setActiveTab('history')}
-                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center ${activeTab === 'history' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
+                  className={`text-xs font-semibold tracking-wider transition-colors relative h-12 flex items-center gap-1.5 ${activeTab === 'history' ? 'text-emerald-400 font-bold border-b-2 border-emerald-400' : 'text-zinc-400 hover:text-zinc-200'}`}
                 >
-                  ⏳ Generation History
+                  <History className="w-3.5 h-3.5" />
+                  Generation History
                 </button>
               </div>
             </div>

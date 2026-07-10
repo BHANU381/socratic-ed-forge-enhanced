@@ -28,6 +28,7 @@ LOG_FILE      = DATA_DIR / "logs.txt"
 TELEMETRY_FILE= DATA_DIR / "telemetry.json"
 PID_FILE      = DATA_DIR / "runner.pid"
 STOP_FLAG     = DATA_DIR / "stop.flag"   # Orchestrator polls this; exits if present
+PROMPTS_DIR   = PROJECT_ROOT / "src" / "prompts"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _read_json(path: Path, default=None):
@@ -146,6 +147,15 @@ async def lifespan(app: FastAPI):
     except FileNotFoundError: pass
     
     yield
+    
+    # Teardown: Terminate running pipeline process on server exit to prevent leaks
+    pid = _get_pid()
+    if pid and _is_running(pid):
+        try: STOP_FLAG.write_text("STOP")
+        except Exception: pass
+        _kill_process_tree(pid)
+        _cleanup_after_stop()
+
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Socratic Ed-Forge API", lifespan=lifespan)
@@ -213,6 +223,7 @@ async def start_pipeline(
     explanation_depth: Optional[str] = Form(None),
     quality_profile: Optional[str] = Form(None),
     enable_google_search: Optional[bool] = Form(None),
+    review_granularity: Optional[str] = Form(None),
     resume: Optional[bool] = Form(None)
 ):
     pid = _get_pid()
@@ -235,6 +246,8 @@ async def start_pipeline(
             data["quality_profile"] = quality_profile
         if enable_google_search is not None:
             data["enable_google_search"] = enable_google_search
+        if review_granularity is not None:
+            data["review_granularity"] = review_granularity
             
         # Validate schema and normalize it to ensure the structure is correct
         from src.models.schemas import normalize_course_input
@@ -351,6 +364,360 @@ class EditSessionPayload(BaseModel):
     submodule_filename: str
     content: str
 
+class ApprovePayload(BaseModel):
+    session_id: str
+
+class SelectionEditPayload(BaseModel):
+    session_id: str
+    selection_text: str
+    instruction: str
+    theme: str = "default"
+    full_text: Optional[str] = None
+    scope: str = "selection"
+
+class SingleEditItem(BaseModel):
+    original_text: str
+    instruction: str
+
+class BatchEditPayload(BaseModel):
+    session_id: str
+    theme: str = "default"
+    full_text: str
+    edits: list[SingleEditItem]
+
+class ChatPayload(BaseModel):
+    session_id: str
+    message: str
+    submodule_filename: str
+
+def _get_containing_paragraph(full_text: str, selection: str) -> str:
+    idx = full_text.find(selection)
+    if idx == -1:
+        return selection
+    # Find start of paragraph (double newline backward)
+    start = full_text.rfind('\n\n', 0, idx)
+    if start == -1:
+        start = 0
+    else:
+        start += 2 # skip the double newline
+    # Find end of paragraph (double newline forward)
+    end = full_text.find('\n\n', idx + len(selection))
+    if end == -1:
+        end = len(full_text)
+    return full_text[start:end].strip()
+
+def _get_section_rules(theme: str, heading: str) -> str:
+    theme_path = PROMPTS_DIR / theme / "content_generator.md"
+    if not theme_path.exists():
+        theme_path = PROMPTS_DIR / "default" / "content_generator.md"
+    if not theme_path.exists():
+        return ""
+        
+    try:
+        lines = theme_path.read_text(encoding="utf-8").split("\n")
+    except Exception:
+        return ""
+        
+    target = heading.strip().lower()
+    norm_target = "".join(c for c in target if c.isalnum())
+    
+    rules = []
+    found = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            norm_line = "".join(c for c in stripped if c.isalnum()).lower()
+            if norm_line == norm_target or norm_target in norm_line or norm_line in norm_target:
+                found = True
+                continue
+            elif found:
+                break
+        if found:
+            rules.append(line)
+            
+    return "\n".join(rules).strip()
+
+def _find_crossed_headings(full_text: str, selection: str) -> list[str]:
+    idx = full_text.find(selection)
+    if idx == -1:
+        return ["#### General"]
+        
+    start_idx = idx
+    end_idx = idx + len(selection)
+    
+    preceding_heading = "#### General"
+    lines_before = full_text[:start_idx].split("\n")
+    for line in reversed(lines_before):
+        line = line.strip()
+        if line.startswith("###") or line.startswith("####"):
+            preceding_heading = line
+            break
+            
+    crossed = [preceding_heading]
+    selection_area = full_text[start_idx:end_idx]
+    for line in selection_area.split("\n"):
+        line = line.strip()
+        if line.startswith("###") or line.startswith("####"):
+            if line not in crossed:
+                crossed.append(line)
+                
+    return crossed
+
+@app.post("/api/session/approve")
+def approve_module(payload: ApprovePayload):
+    if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    session_dir = OUTPUT_DIR / payload.session_id
+    if not session_dir.exists():
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    pause_file = session_dir / "module_pause.json"
+    if pause_file.exists():
+        try:
+            with open(pause_file, "r+", encoding="utf-8") as f:
+                data = json.load(f)
+                data["status"] = "approved"
+                f.seek(0)
+                json.dump(data, f, indent=2)
+                f.truncate()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    return JSONResponse({"status": "approved"})
+
+import re
+
+def sanitize_html_to_markdown(text: str) -> str:
+    if not text:
+        return text
+    # 1. Convert list items <li> to Markdown bullets *
+    text = re.sub(r'<li>\s*', r'\n* ', text)
+    text = re.sub(r'</li>', '', text)
+    # 2. Convert strong tags to **
+    text = re.sub(r'</?strong>', '**', text)
+    # 3. Strip structural tags like <ul>, </ul>, <ol>, </ol>, <p>, </p>
+    text = re.sub(r'</?(?:ul|ol|p)>', '', text)
+    # 4. Collapse consecutive line breaks
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+def validate_patch_scope(original: str, patched: str) -> bool:
+    # 1. Heading structure matching
+    orig_headings = [h.strip() for h in re.findall(r'^#+\s+.*$', original, re.M)]
+    pat_headings = [h.strip() for h in re.findall(r'^#+\s+.*$', patched, re.M)]
+    if orig_headings != pat_headings:
+        return False
+        
+    # 2. Bullet point (*) and numbered list item count matching
+    orig_bullets = len(re.findall(r'^\s*[\*\-]\s+', original, re.M))
+    pat_bullets = len(re.findall(r'^\s*[\*\-]\s+', patched, re.M))
+    orig_numbered = len(re.findall(r'^\s*\d+\.\s+', original, re.M))
+    pat_numbered = len(re.findall(r'^\s*\d+\.\s+', patched, re.M))
+    
+    if orig_bullets != pat_bullets or orig_numbered != pat_numbered:
+        return False
+        
+    # 3. Prevent structural wipeout (e.g. over-deletion of selections > 15 chars)
+    if len(original) > 15 and len(patched) < (len(original) * 0.45):
+        return False
+        
+    return True
+
+def validate_patch_grounding(patched: str, context: str) -> bool:
+    # Extract uppercase entities/acronyms of 3-6 chars (e.g. ICAM, ROI) from the context
+    terms = set(re.findall(r'\b[A-Z]{3,6}\b', context))
+    for t in terms:
+        if t not in patched:
+            return False
+    return True
+
+def run_patch_validation_loop(editor, draft: str, feedback: str, heading: str, grounding_context: str, original_text: str, max_retries: int = 3) -> str:
+    current_feedback = feedback
+    last_patched_str = ""
+    
+    for attempt in range(max_retries):
+        patched = editor.edit_patch(
+            draft=draft,
+            feedback=current_feedback,
+            heading=heading,
+            course_topic="Custom editing",
+            submodule_title="Custom lesson",
+            grounding_context=grounding_context
+        )
+        
+        if hasattr(patched, "replacement_markdown"):
+            patched_str = patched.replacement_markdown
+        elif hasattr(patched, "patched_content"):
+            patched_str = patched.patched_content
+        elif isinstance(patched, str):
+            patched_str = patched
+        else:
+            patched_str = str(patched)
+            
+        patched_str = sanitize_html_to_markdown(patched_str)
+        last_patched_str = patched_str
+        
+        # Run validations
+        scope_ok = validate_patch_scope(original_text, patched_str)
+        grounding_ok = validate_patch_grounding(patched_str, original_text)
+        
+        if scope_ok and grounding_ok:
+            return patched_str
+            
+        # If invalid, refine feedback for next attempt
+        failures = []
+        if not scope_ok:
+            failures.append("retaining the exact heading structures/markdown formatting")
+        if not grounding_ok:
+            missing_terms = [t for t in set(re.findall(r'\b[A-Z]{3,6}\b', original_text)) if t not in patched_str]
+            failures.append(f"preserving key concepts: {', '.join(missing_terms)}")
+            
+        current_feedback = f"{feedback} (Note: Your previous attempt failed validation. Please revise it while strictly {', and '.join(failures)}.)"
+        
+def run_batch_patch_validation(editor, edits: list[dict], grounding_context: str, max_retries: int = 3) -> list[str]:
+    results = []
+    for item in edits:
+        original = item.get("original_text", "")
+        instruction = item.get("instruction", "")
+        # Run isolated validation loop for each selection independently
+        patched_item = run_patch_validation_loop(
+            editor=editor,
+            draft=original,
+            feedback=instruction,
+            heading="Section Update",
+            grounding_context=grounding_context,
+            original_text=original,
+            max_retries=max_retries
+        )
+        results.append(patched_item)
+    return results
+
+@app.post("/api/session/edit/selection")
+def edit_selection(payload: SelectionEditPayload):
+    if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    from src.agents.core import PatchEditor
+    try:
+        editor = PatchEditor(theme=payload.theme)
+        
+        # Determine draft scope context
+        draft_text = payload.selection_text
+        if payload.scope == "paragraph" and payload.full_text:
+            draft_text = _get_containing_paragraph(payload.full_text, payload.selection_text)
+            
+        # Dynamically compile heading and section rules context
+        headings = _find_crossed_headings(payload.full_text or "", payload.selection_text)
+        heading_title = " & ".join(headings)
+        
+        rules_list = []
+        for h in headings:
+            rules_list.append(f"Rules for {h}:\n{_get_section_rules(payload.theme, h)}")
+        compound_rules = "\n\n".join(rules_list)
+        
+        grounding_context = payload.full_text or ""
+        if compound_rules:
+            grounding_context += f"\n\nTarget Prompt Template Directives:\n{compound_rules}"
+            
+        patched_str = run_patch_validation_loop(
+            editor=editor,
+            draft=draft_text,
+            feedback=payload.instruction,
+            heading=heading_title,
+            grounding_context=grounding_context,
+            original_text=payload.selection_text
+        )
+            
+        # Accumulate token metrics in centralized session telemetry
+        session_dir = OUTPUT_DIR / payload.session_id
+        manifest_path = session_dir / "run_manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+                
+                input_t = getattr(editor, "input_tokens", 0) or 0
+                output_t = getattr(editor, "output_tokens", 0) or 0
+                total_t = input_t + output_t
+                
+                manifest_data["total_tokens"] = manifest_data.get("total_tokens", 0) + total_t
+                if "agent_tokens" not in manifest_data:
+                    manifest_data["agent_tokens"] = {}
+                manifest_data["agent_tokens"]["patch_editor"] = manifest_data["agent_tokens"].get("patch_editor", 0) + total_t
+                
+                with open(manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(manifest_data, f, indent=4)
+            except Exception:
+                pass
+                
+        return JSONResponse({"patched_text": patched_str})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/edit/selection/batch")
+def edit_selection_batch(payload: BatchEditPayload):
+    if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    from src.agents.core import PatchEditor
+    try:
+        editor = PatchEditor(theme=payload.theme)
+        
+        # Format the edits as dictionaries
+        edits_dict = [{"original_text": e.original_text, "instruction": e.instruction} for e in payload.edits]
+        
+        # Run batch patch generation with validators
+        patched_list = run_batch_patch_validation(
+            editor=editor,
+            edits=edits_dict,
+            grounding_context=payload.full_text
+        )
+        
+        # Accumulate token metrics in centralized session telemetry
+        session_dir = OUTPUT_DIR / payload.session_id
+        manifest_path = session_dir / "run_manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+                
+                input_t = getattr(editor, "input_tokens", 0) or 0
+                output_t = getattr(editor, "output_tokens", 0) or 0
+                total_t = input_t + output_t
+                
+                manifest_data["total_tokens"] = manifest_data.get("total_tokens", 0) + total_t
+                if "agent_tokens" not in manifest_data:
+                    manifest_data["agent_tokens"] = {}
+                manifest_data["agent_tokens"]["patch_editor"] = manifest_data["agent_tokens"].get("patch_editor", 0) + total_t
+                
+                with open(manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(manifest_data, f, indent=4)
+            except Exception:
+                pass
+                
+        return JSONResponse({"patched_texts": patched_list})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/session/chat")
+def chat_with_agent(payload: ChatPayload):
+    if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    from src.agents.core import AgentBase
+    
+    session_dir = OUTPUT_DIR / payload.session_id
+    submodule_path = session_dir / payload.submodule_filename
+    submodule_text = ""
+    if submodule_path.exists():
+        submodule_text = submodule_path.read_text(encoding="utf-8")
+        
+    prompt = f"User is reviewing the following submodule lesson:\n\n```markdown\n{submodule_text}\n```\n\nUser Question/Instruction: {payload.message}\n\nRespond as a helpful course editor agent with suggestions or revised markdown blocks."
+    
+    try:
+        agent = AgentBase(role="Course Review Assistant")
+        agent.system_instruction = "You are a helpful course editor assistant. Converse with the user, answer questions about the submodule text, or suggest improvements."
+        response_text = agent._run_with_retry(prompt)
+        return JSONResponse({"response": response_text})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/sessions")
 def get_sessions():
     sessions = []
@@ -371,6 +738,24 @@ def get_sessions():
                 })
     return JSONResponse({"sessions": sessions})
 
+def _recompile_session_master(session_dir: Path):
+    from src.engine.orchestrator import compile_master_file
+    from src.models.schemas import normalize_course_input
+    import re
+    
+    input_path = INPUT_DIR / "course_input.json"
+    if not input_path.exists():
+        return
+        
+    try:
+        data = json.loads(input_path.read_text(encoding="utf-8"))
+        course = normalize_course_input(data)
+        safe_course_name = re.sub(r'[^a-zA-Z0-9_]', '_', course.course_title)
+        master_file_path = session_dir / f"{safe_course_name}.md"
+        compile_master_file(session_dir, master_file_path, course)
+    except Exception:
+        pass
+
 @app.post("/api/sessions/edit")
 def edit_session(payload: EditSessionPayload):
     if ".." in payload.session_id or "/" in payload.session_id or "\\" in payload.session_id:
@@ -385,10 +770,12 @@ def edit_session(payload: EditSessionPayload):
     file_path = session_dir / payload.submodule_filename
     try:
         file_path.write_text(payload.content, encoding="utf-8")
+        _recompile_session_master(session_dir)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to write file: {str(e)}")
         
     return JSONResponse({"status": "updated"})
+
 
 @app.get("/api/sessions/{session_id}/preview")
 def get_session_preview(session_id: str):

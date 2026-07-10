@@ -74,6 +74,7 @@ class CourseInput(BaseModel):
     code_example_style: Literal["none", "minimal", "practical", "progressive_production", "production_first"] = "progressive_production"
     explanation_depth: Literal["concise", "balanced", "deep"] = "balanced"
     enable_google_search: Optional[bool] = True
+    review_granularity: Literal["module", "submodule", "none"] = "module"
 
 
 # Strict base model for modern/new models
@@ -250,6 +251,7 @@ class CourseStructure(StrictBaseModel):
     student_personas: List[StudentPersona] = Field(default_factory=list)
     lesson_contract: Optional[LessonContract] = None
     enable_google_search: Optional[bool] = True
+    review_granularity: Literal["module", "submodule", "none"] = "module"
 
     # Optional grounding/material fields
     tool_stack: Optional[ToolStack] = None
@@ -273,7 +275,7 @@ class CourseStructure(StrictBaseModel):
     def default_none_to_dict(cls, v):
         return {} if v is None else v
 
-    @field_validator("prompt_theme", "quality_profile", "learner_level", "code_example_style", "explanation_depth", "enable_google_search", mode="before")
+    @field_validator("prompt_theme", "quality_profile", "learner_level", "code_example_style", "explanation_depth", "enable_google_search", "review_granularity", mode="before")
     @classmethod
     def default_none_to_str_defaults(cls, v, info):
         if v is None:
@@ -283,7 +285,8 @@ class CourseStructure(StrictBaseModel):
                 "learner_level": "beginner",
                 "code_example_style": "progressive_production",
                 "explanation_depth": "balanced",
-                "enable_google_search": True
+                "enable_google_search": True,
+                "review_granularity": "module"
             }
             return defaults.get(info.field_name)
         return v
@@ -354,5 +357,6 @@ def normalize_course_input(payload: dict) -> CourseStructure:
         lesson_contract=payload.get("lesson_contract"),
         tool_stack=payload.get("tool_stack"),
         course_material_ids=payload.get("course_material_ids", []),
-        material_bank=payload.get("material_bank", {})
+        material_bank=payload.get("material_bank", {}),
+        review_granularity=payload.get("review_granularity", "module")
     )

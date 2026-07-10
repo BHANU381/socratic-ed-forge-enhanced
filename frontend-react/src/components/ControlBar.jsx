@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Settings2, Play, Square, Trash2, Upload, Loader2 } from 'lucide-react'
+import { Settings2, Play, Square, Trash2, Upload, Loader2, Check } from 'lucide-react'
 
 export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [file, setFile]         = useState(null)
@@ -9,13 +9,14 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [rpm, setRpm]           = useState(15)
   const [tpm, setTpm]           = useState(250000)
   const [themes, setThemes]     = useState(["default"])
-  const [selectedTheme, setSelectedTheme] = useState("default")
+  const [selectedTheme, setSelectedTheme] = useState("otto2_structured")
   const [learnerLevel, setLearnerLevel] = useState("beginner")
-  const [codeStyle, setCodeStyle]       = useState("progressive_production")
+  const [codeStyle, setCodeStyle]       = useState("none")
   const [expDepth, setExpDepth]         = useState("balanced")
   const [qualityProfile, setQualityProfile] = useState("standard")
   const [resume, setResume]             = useState(false)
   const [enableSearch, setEnableSearch] = useState(true)
+  const [reviewGranularity, setReviewGranularity] = useState("module")
   const fileInputRef            = useRef(null)
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
       fd.append('quality_profile', qualityProfile)
       fd.append('resume', resume.toString())
       fd.append('enable_google_search', enableSearch.toString())
+      fd.append('review_granularity', reviewGranularity)
       const res = await fetch('/api/start', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
@@ -103,7 +105,7 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
               htmlFor="json-upload"
             >
               {file ? (
-                <span className="truncate max-w-[200px]">✓ {file.name}</span>
+                <span className="truncate max-w-[200px] flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> {file.name}</span>
               ) : (
                 <span className="flex items-center gap-1.5"><Upload className="w-3.5 h-3.5" /> Click to upload JSON config</span>
               )}
@@ -212,6 +214,21 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
                   <option value="standard">Standard</option>
                   <option value="light">Light</option>
                   <option value="textbook">Textbook</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 w-full">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Review Level</label>
+                <select
+                  value={reviewGranularity}
+                  onChange={e => setReviewGranularity(e.target.value)}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                >
+                  <option value="module">Per Module</option>
+                  <option value="submodule">Per Submodule</option>
+                  <option value="none">No Review Gate</option>
                 </select>
               </div>
             </div>

@@ -248,6 +248,11 @@ def test_orchestrator_final_eval_blocker_override(tmp_path):
     orchestrator.generator = MagicMock()
     orchestrator.generator.generate.return_value = "### Introduction\nThis is an introduction hook.\n\n### Core Concepts\nThis explains the core idea in detail.\n\n### Practical Application\nThis is a hands-on practical application.\n\n### Summary and Key Takeaways\n- Point 1\n- Point 2"
     
+    orchestrator.validator = MagicMock()
+    orchestrator.validator.validate.return_value = MagicMock(issues=[])
+    orchestrator.grounding_auditor = MagicMock()
+    orchestrator.grounding_auditor.audit_grounding.return_value = {"status": "APPROVED", "blockers": []}
+    
     # Let semantic evaluator approve during loop (so semantic count is written as 1)
     # but fail during final evaluation (returning a blocker)
     loop_result = MagicMock()

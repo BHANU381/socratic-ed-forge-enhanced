@@ -77,6 +77,7 @@ export function PipelineMatrix({ telemetry }) {
                   {/* Submodule Rows */}
                   {submodules.map((sub, subIdx) => {
                     const isRowPaused = telemetry?.status === 'paused_for_repair' && telemetry?.current_submodule === sub
+                    const isRowReviewing = telemetry?.status === 'paused_for_review' && telemetry?.current_submodule === sub
                     const sessionId = telemetry?.session_dir?.split(/[\\/]/).pop() || ''
                     const stats = submoduleTelemetry[modTitle]?.[sub] || {}
                     const det = stats.deterministic || '-'
@@ -87,10 +88,15 @@ export function PipelineMatrix({ telemetry }) {
                     return (
                       <React.Fragment key={subIdx}>
                         <tr 
-                          className="border-b border-zinc-800/30 hover:bg-zinc-900/10 transition-colors"
+                          className={`border-b border-zinc-800/30 hover:bg-zinc-900/10 transition-all ${isRowReviewing ? 'bg-amber-500/5 shadow-[inset_0_0_10px_rgba(245,158,11,0.05)] border-l-2 border-l-amber-500' : ''}`}
                         >
-                          <td className="p-4 pl-8 text-zinc-400 font-medium leading-relaxed">
+                          <td className="p-4 pl-8 text-zinc-400 font-medium leading-relaxed flex items-center gap-2">
                             📄 {sub}
+                            {isRowReviewing && (
+                              <span className="text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full font-sans tracking-wide uppercase font-bold animate-pulse">
+                                Under Review
+                              </span>
+                            )}
                           </td>
                           <td className="p-4 text-center">
                             {renderBadge(det)}

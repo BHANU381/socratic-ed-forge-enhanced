@@ -137,9 +137,20 @@ def run_verification(theme: str):
     finally:
         # Restore backup
         if backup_path.exists():
-            if input_path.exists():
-                os.remove(input_path)
-            shutil.move(backup_path, input_path)
+            try:
+                # Read backup and write to input to avoid WinError 32 sharing violations
+                input_path.write_bytes(backup_path.read_bytes())
+                try: os.remove(backup_path)
+                except Exception: pass
+            except Exception:
+                # Fallback to standard move if possible
+                try:
+                    if input_path.exists():
+                        try: os.remove(input_path)
+                        except Exception: pass
+                    shutil.move(backup_path, input_path)
+                except Exception:
+                    pass
 
 if __name__ == "__main__":
     import argparse

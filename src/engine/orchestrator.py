@@ -178,7 +178,7 @@ def update_live_preview(session_dir: Optional[Path], master_file: Path, sub_titl
         print(f"Error updating live preview: {e}")
 
 class Orchestrator:
-    def __init__(self, course: Any, session_dir: Path, run_type: str = "new_run"):
+    def __init__(self, course: Any, session_dir: Path, run_type: str = "new_run", interactive: bool = False):
         if course.__class__.__name__ == "CourseStructure":
             self.course = course
         elif isinstance(course, dict):
@@ -196,6 +196,7 @@ class Orchestrator:
 
         self.session_dir = session_dir
         self.run_type = run_type
+        self.interactive = interactive
         
         # File path setups
         safe_course_name = "".join([c if c.isalnum() else "_" for c in self.course.course_title])
@@ -317,6 +318,13 @@ class Orchestrator:
                 except Exception:
                     pass
             self._recalculate_telemetry_summaries()
+
+    def load_running_summary(self) -> str:
+        if self.session_dir:
+            summary_file = self.session_dir / "running_summary.md"
+            if summary_file.exists():
+                return summary_file.read_text(encoding="utf-8")
+        return ""
 
     def _recalculate_telemetry_summaries(self):
         self.telemetry["passed_1st_iteration"] = 0
@@ -694,8 +702,12 @@ class Orchestrator:
         
         # Save draft to individual submodule file for editing/repair
         import re
-        pos_str = re.sub(r'[^a-zA-Z0-9]', '_', str(module_position)) if module_position else "1_1"
-        pos_str = re.sub(r'_+', '_', pos_str).strip('_')
+        match = re.search(r'(?i)Module\s+(\d+).*?Submodule\s+(\d+)', str(module_position))
+        if match:
+            pos_str = f"{match.group(1)}_{match.group(2)}"
+        else:
+            pos_str = re.sub(r'[^a-zA-Z0-9]', '_', str(module_position)) if module_position else "1_1"
+            pos_str = re.sub(r'_+', '_', pos_str).strip('_')
         sub_filename = f"submodule_{pos_str}.md"
         (self.session_dir / sub_filename).write_text(draft, encoding="utf-8")
         
@@ -1122,13 +1134,50 @@ class Orchestrator:
         else:
             return "approved", draft
 
+    def trigger_module_pause_gate(self, m_idx: int, mod: Any) -> None:
+        import os
+        import sys
+        import json
+        import time
+        from src.utils.logger import log_event
+        from src.utils.logger import update_telemetry
+
+        pause_file = self.session_dir / "module_pause.json"
+        pause_data = {
+            "status": "paused_for_review",
+            "module_index": m_idx,
+            "module_title": mod.module_title
+        }
+        with open(pause_file, "w", encoding="utf-8") as f:
+            json.dump(pause_data, f, indent=2)
+            
+        self.telemetry["status"] = "paused_for_review"
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        
+        if self.interactive:
+            log_event("Orchestrator", f"Module {m_idx+1} complete. Paused for review.")
+            while True:
+                time.sleep(1)
+                if not pause_file.exists():
+                    break
+                try:
+                    with open(pause_file, "r", encoding="utf-8") as f:
+                        p_res = json.load(f)
+                except Exception:
+                    continue
+                if p_res.get("status") == "approved":
+                    try: pause_file.unlink()
+                    except FileNotFoundError: pass
+                    break
+        
+        self.telemetry["status"] = "Running"
+        update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+
     def trigger_manual_repair(self, submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title):
         import sys
         import os
         import json
-        is_testing = "pytest" in sys.modules or "unittest" in sys.modules
-        enable_pause = not is_testing or os.environ.get("TEST_BREAKPOINT_PAUSE") == "1"
-        if not enable_pause:
+        if not self.interactive:
             return "failed_blocker", draft
 
         bp_path = self.session_dir / "breakpoint.json"
@@ -1219,7 +1268,7 @@ class Orchestrator:
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
         
         total_submodules = sum(len(mod.topics) for mod in self.course.modules)
-        running_summary = ""
+        running_summary = self.load_running_summary()
         
         total_modules = len(self.course.modules)
         for m_idx, mod in enumerate(self.course.modules):
@@ -1340,6 +1389,7 @@ class Orchestrator:
                         running_summary=running_summary
                     )
                     running_summary += f"\n- {sub.topic_title}: {summary_text.strip()}"
+                    (self.session_dir / "running_summary.md").write_text(running_summary, encoding="utf-8")
                     self.update_agent_tokens("archivist", self.archivist)
                     log_event("Archivist", f"Processed: Submodule compressed successfully. Summary preview: {summary_text[:100]}...")
                 except Exception as e:
@@ -1351,6 +1401,10 @@ class Orchestrator:
                 for reason in self.telemetry["failure_reasons"]:
                     if reason.get("severity") == "blocker":
                         module_blocker_types.append(reason["message"])
+
+                # Submodule-wise review pause gate
+                if getattr(self.course, "review_granularity", "module") == "submodule":
+                    self.trigger_module_pause_gate(m_idx, mod)
                     
             # End of module loop: Run Learning Engine if repeated blockers exist
             # Count repeated patterns (any specific failure reason occurring >= 2 times)
@@ -1365,6 +1419,10 @@ class Orchestrator:
                     
             # Reset local submodule failure tracking for the next module
             self.telemetry["failure_reasons"] = []
+            
+            # Module-wise review pause gate
+            if getattr(self.course, "review_granularity", "module") == "module":
+                self.trigger_module_pause_gate(m_idx, mod)
             
         # Final cleanup to remove globally duplicated content
         if self.master_file.exists():
@@ -1451,7 +1509,7 @@ def main() -> None:
         session_dir.mkdir(parents=True, exist_ok=True)
         print(f"Initializing new session in: {session_dir}")
 
-    orchestrator = Orchestrator(course, session_dir, run_type=run_type)
+    orchestrator = Orchestrator(course, session_dir, run_type=run_type, interactive=True)
     orchestrator.run_course_pipeline()
 
 def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str]:
@@ -1573,5 +1631,40 @@ def check_manifest_and_leakage(master_content: str, course: Any) -> Optional[str
             
     return None
 
+def compile_master_file(session_dir: Path, master_file_path: Path, course: Any) -> None:
+    from src.utils.cleanup_utils import final_markdown_cleanup
+    from src.utils.string_utils import normalize_module_heading, normalize_submodule_heading
+    
+    content_parts = []
+    content_parts.append(f"# {course.course_title}\n")
+    content_parts.append(f"**Topic:** {course.course_context}\n")
+    content_parts.append("# Table of Contents\n")
+    for m_idx, mod in enumerate(course.modules):
+        m_title = normalize_module_heading(mod.module_title)
+        content_parts.append(f"{m_idx+1}. {m_title}")
+        for s_idx, sub in enumerate(mod.topics):
+            sub_title = normalize_submodule_heading(sub.topic_title)
+            content_parts.append(f"   - {sub_title}")
+    content_parts.append("\n---\n")
+    
+    for m_idx, mod in enumerate(course.modules):
+        sub_contents = []
+        for s_idx, sub in enumerate(mod.topics):
+            sub_file = session_dir / f"submodule_{m_idx+1}_{s_idx+1}.md"
+            if sub_file.exists():
+                sub_text = sub_file.read_text(encoding="utf-8")
+                norm_sub_title = normalize_submodule_heading(sub.topic_title)
+                sub_contents.append(f"\n## Submodule: {norm_sub_title}\n\n{sub_text}\n\n")
+        
+        if sub_contents:
+            norm_mod_title = normalize_module_heading(mod.module_title)
+            content_parts.append(f"\n# Module {m_idx+1}: {norm_mod_title}\n")
+            content_parts.extend(sub_contents)
+            
+    full_text = "\n".join(content_parts)
+    cleaned_text = final_markdown_cleanup(full_text)
+    master_file_path.write_text(cleaned_text, encoding="utf-8")
+
 if __name__ == "__main__":
     main()
+
