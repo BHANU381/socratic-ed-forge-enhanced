@@ -573,6 +573,8 @@ def run_patch_validation_loop(editor, draft: str, feedback: str, heading: str, g
             
         current_feedback = f"{feedback} (Note: Your previous attempt failed validation. Please revise it while strictly {', and '.join(failures)}.)"
         
+    return last_patched_str if last_patched_str else draft
+        
 def run_batch_patch_validation(editor, edits: list[dict], grounding_context: str, max_retries: int = 3) -> list[str]:
     results = []
     for item in edits:

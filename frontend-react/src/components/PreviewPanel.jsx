@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -79,20 +79,90 @@ const _get_containing_paragraph = (fullText, selectedText) => {
   const idx = fullText.indexOf(selectedText);
   if (idx === -1) return selectedText;
   
-  let start = fullText.lastIndexOf('\n\n', idx);
-  start = (start === -1) ? 0 : start + 2;
-  let end = fullText.indexOf('\n\n', idx + selectedText.length);
-  end = (end === -1) ? fullText.length : end;
+  const precedingText = fullText.slice(0, idx);
+  const lastDoubleNewline = precedingText.lastIndexOf('\n\n');
+  
+  let lastHeading = -1;
+  try {
+    const headingMatches = [...precedingText.matchAll(/\n#+\s+/g)];
+    if (headingMatches.length > 0) {
+      lastHeading = headingMatches[headingMatches.length - 1].index;
+    } else if (precedingText.startsWith('#')) {
+      lastHeading = 0;
+    }
+  } catch (e) {}
+
+  let lastBullet = -1;
+  try {
+    const bulletMatches = [...precedingText.matchAll(/\n\s*([-*]|\d+\.)\s+/g)];
+    if (bulletMatches.length > 0) {
+      lastBullet = bulletMatches[bulletMatches.length - 1].index;
+    }
+  } catch (e) {}
+
+  let start = 0;
+  if (lastDoubleNewline !== -1) start = lastDoubleNewline + 2;
+  if (lastHeading !== -1 && lastHeading > lastDoubleNewline) {
+    start = lastHeading;
+  }
+  if (lastBullet !== -1 && lastBullet > start) {
+    start = lastBullet + 1;
+  }
+
+  const followingText = fullText.slice(idx + selectedText.length);
+  const nextDoubleNewline = followingText.indexOf('\n\n');
+  
+  let nextHeading = -1;
+  try {
+    const headingMatch = followingText.match(/\n#+\s+/);
+    if (headingMatch) {
+      nextHeading = headingMatch.index;
+    }
+  } catch (e) {}
+
+  let nextBullet = -1;
+  try {
+    const bulletMatch = followingText.match(/\n\s*([-*]|\d+\.)\s+/);
+    if (bulletMatch) {
+      nextBullet = bulletMatch.index;
+    }
+  } catch (e) {}
+
+  let end = fullText.length;
+  const candidates = [];
+  if (nextDoubleNewline !== -1) candidates.push(idx + selectedText.length + nextDoubleNewline);
+  if (nextHeading !== -1) candidates.push(idx + selectedText.length + nextHeading);
+  if (nextBullet !== -1) candidates.push(idx + selectedText.length + nextBullet);
+  
+  if (candidates.length > 0) {
+    end = Math.min(...candidates);
+  }
   
   return fullText.slice(start, end).trim();
 };
 
-export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, telemetry }) {
+export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, telemetry, isActive = true }) {
   const containerRef = useRef(null)
+  const scrollPosRef = useRef(null)
+  const lastRenderedContent = useRef(null)
+  const prevStatusRef = useRef('')
+  const [showCompletionBadge, setShowCompletionBadge] = useState(false)
   const [editMode, setEditMode] = useState(false)
-  const [content, setContent] = useState(preview || '')
+  const [content, setRawContent] = useState(() => (preview || '').replace(/\r\n/g, '\n'))
   const [filename, setFilename] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const setContent = useCallback((val) => {
+    if (typeof val === 'function') {
+      setRawContent(prev => {
+        const next = val(prev);
+        return typeof next === 'string' ? next.replace(/\r\n/g, '\n') : next;
+      });
+    } else if (typeof val === 'string') {
+      setRawContent(val.replace(/\r\n/g, '\n'));
+    } else {
+      setRawContent(val);
+    }
+  }, []);
   
   // Highlight selection states
   const [selectionRange, setSelectionRange] = useState(null)
@@ -161,7 +231,37 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
   const [activeBatchPatches, setActiveBatchPatches] = useState([])
   const [batchInstruction, setBatchInstruction] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
- 
+
+  const saveScroll = useCallback(() => {
+    if (containerRef.current) {
+      scrollPosRef.current = containerRef.current.scrollTop
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (scrollPosRef.current !== null && containerRef.current) {
+      containerRef.current.scrollTop = scrollPosRef.current
+    }
+  }, [content, queuedEdits, activeBatchPatches, activePatch])
+
+  useEffect(() => {
+    const prevStatus = prevStatusRef.current
+    const currentStatus = telemetry?.status || ''
+    
+    if (prevStatus === 'Running' && currentStatus === 'Completed') {
+      if (containerRef.current) {
+        if (containerRef.current.scrollTop < 100) {
+          containerRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+        } else {
+          setShowCompletionBadge(true)
+        }
+      }
+    } else if (currentStatus === 'Running') {
+      setShowCompletionBadge(false)
+    }
+    prevStatusRef.current = currentStatus
+  }, [telemetry?.status])
+
   const handleApproveModule = async () => {
     if (!sessionId) return
     setIsApproving(true)
@@ -309,6 +409,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
     const handleDismiss = (e) => {
       if (popupRef.current && popupRef.current.contains(e.target)) return
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('input')) return
       clearActiveSelection()
     }
 
@@ -395,6 +496,11 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
   // Text selection handler for floating patch popup
   const handleTextSelection = useCallback((e) => {
+    // If clicking on an input or button, ignore selection handling completely
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('input')) {
+      return
+    }
+
     // Lock selection if we are in the review/active-patch phase
     if (activeBatchPatches.some(p => p.status === 'pending')) {
       window.getSelection()?.removeAllRanges()
@@ -482,6 +588,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
   const handleEnqueueComment = (instructionText) => {
     if (!selectedText || !instructionText.trim()) return
+    saveScroll()
     const newEdit = {
       id: Math.random().toString(36).substring(2, 9),
       originalText: selectedText,
@@ -498,6 +605,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       e.stopPropagation()
       const editId = removeBtn.getAttribute('data-edit-id')
       if (editId) {
+        saveScroll()
         setQueuedEdits(prev => prev.filter(item => item.id !== editId))
       }
     }
@@ -523,6 +631,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       if (res.ok) {
         const data = await res.json()
         const returnedPatches = data.patched_texts || []
+        saveScroll()
         const mappedPatches = queuedEdits.map((e, idx) => ({
           ...e,
           patchedText: returnedPatches[idx] || '',
@@ -544,6 +653,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
     const patch = activeBatchPatches.find(p => p.id === id)
     if (!patch) return
     
+    saveScroll()
     // Merge patch text into local draft
     const newContent = content.replace(patch.originalText, patchedText)
     setContent(newContent)
@@ -570,6 +680,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
   }
 
   const handleRejectBatchPatch = (id) => {
+    saveScroll()
     setActiveBatchPatches(prev => {
       const nextPatches = prev.map(p => p.id === id ? { ...p, status: 'rejected' } : p);
       if (!nextPatches.some(p => p.status === 'pending')) {
@@ -581,6 +692,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
   const handleRetryBatchPatch = async (id, originalText, newInstruction) => {
     // Isolated single patch regenerate
+    saveScroll()
     setActiveBatchPatches(prev => prev.map(p => p.id === id ? { ...p, status: 'pending', patchedText: '', instruction: newInstruction } : p))
     try {
       const res = await fetch('/api/session/edit/selection', {
@@ -737,7 +849,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
                   }}
                   disabled={isQueryingPatch}
                   placeholder="Tell AI what is right/wrong about this..."
-                  className="flex-1 px-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
+                  className="flex-1 px-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50 select-text"
                 />
                 <button
                   onClick={handleRetryInlinePatch}
@@ -872,10 +984,23 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       }
     } catch (e) {}
 
+    // Check if there is a list item start in preceding text
+    let lastBullet = -1;
+    try {
+      const bulletMatches = [...precedingText.matchAll(/\n\s*([-*]|\d+\.)\s+/g)];
+      if (bulletMatches.length > 0) {
+        lastBullet = bulletMatches[bulletMatches.length - 1].index;
+      }
+    } catch (e) {}
+
     let paraStart = 0;
     if (lastDoubleNewline !== -1) paraStart = lastDoubleNewline + 2;
     if (lastHeading !== -1 && lastHeading > lastDoubleNewline) {
       paraStart = lastHeading;
+    }
+    // If a bullet point is closer than the double newline/heading, snap to the bullet start
+    if (lastBullet !== -1 && lastBullet > paraStart) {
+      paraStart = lastBullet + 1; // +1 to skip the leading newline
     }
 
     const followingText = fullText.slice(matchInfo.index + matchInfo.length);
@@ -889,10 +1014,19 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       }
     } catch (e) {}
 
+    let nextBullet = -1;
+    try {
+      const bulletMatch = followingText.match(/\n\s*([-*]|\d+\.)\s+/);
+      if (bulletMatch) {
+        nextBullet = bulletMatch.index;
+      }
+    } catch (e) {}
+
     let paraEnd = fullText.length;
     const candidates = [];
     if (nextDoubleNewline !== -1) candidates.push(matchInfo.index + matchInfo.length + nextDoubleNewline);
     if (nextHeading !== -1) candidates.push(matchInfo.index + matchInfo.length + nextHeading);
+    if (nextBullet !== -1) candidates.push(matchInfo.index + matchInfo.length + nextBullet);
     
     if (candidates.length > 0) {
       paraEnd = Math.min(...candidates);
@@ -908,9 +1042,30 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
   const wrapMultiParagraphHtml = (text, className) => {
     if (!text) return '';
     if (!className) return text;
-    return text.split('\n\n')
-      .map(part => part.trim() ? `<span class="${className}">${part}</span>` : part)
-      .join('\n\n');
+    // Strip leading markdown heading tokens from each line before injecting into HTML spans.
+    // Inside an HTML <span>, remark-gfm can no longer parse "#### Heading" as a heading —
+    // it renders the raw '#' characters as literal text. Stripping them makes the content
+    // render cleanly as normal paragraph text within the diff highlight.
+    const stripHeadings = (str) =>
+      str.split('\n').map(line => line.replace(/^#{1,6}\s+/, '')).join('\n');
+      
+    // Split by double newline or single newline followed by a list marker, keeping separators at odd indices
+    const tokens = text.split(/(\n\n|\n(?=\s*(?:[-*]|\d+\.)\s+))/);
+    return tokens.map((token, idx) => {
+      if (idx % 2 === 1) return token; // Keep separators unchanged
+      if (!token.trim()) return token;
+      
+      const cleanToken = stripHeadings(token);
+      
+      // Match markdown list markers at the start of the token
+      const listMatch = cleanToken.match(/^(\s*(?:[-*]|\d+\.)\s+)([\s\S]*)$/);
+      if (listMatch) {
+        const [, marker, rest] = listMatch;
+        return `${marker}<span class="${className}">${rest}</span>`;
+      }
+      
+      return `<span class="${className}">${cleanToken}</span>`;
+    }).join('');
   };
 
   const reconstructParagraphHtml = (before, matchText, after, className) => {
@@ -1126,7 +1281,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
                       e.target.value = ''
                     }
                   }}
-                  className="flex-1 px-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans"
+                  className="flex-1 px-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans select-text"
                 />
                 <button
                   onClick={(e) => {
@@ -1171,6 +1326,20 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
           <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 animate-pulse" style={{ animationDelay: '0.4s' }} />
         </div>
         Waiting for production to start…
+      </div>
+    )
+  }
+
+  if (isActive || !lastRenderedContent.current) {
+    lastRenderedContent.current = (
+      <div className={editMode ? 'hidden' : 'w-full flex flex-col'}>
+        {activeBatchPatches.length > 0 ? (
+          renderContentWithBatchDiffs()
+        ) : activePatch ? (
+          renderContentWithDiff()
+        ) : (
+          renderContentWithStagedHighlights()
+        )}
       </div>
     )
   }
@@ -1259,9 +1428,23 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
           </div>
         </div>
 
+        {showCompletionBadge && (
+          <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-30 animate-bounce">
+            <button
+              onClick={() => {
+                containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+                setShowCompletionBadge(false)
+              }}
+              className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-zinc-950 font-bold px-4 py-2 rounded-full text-xs shadow-[0_4px_20px_rgba(245,158,11,0.4)] flex items-center gap-1.5 transition-all"
+            >
+              <span>✨ Textbook complete! Go to top</span>
+            </button>
+          </div>
+        )}
+
         {/* Text Area or Markdown view */}
         <div 
-          className={`flex-1 preview-content overflow-auto py-12 px-4 md:px-8 lg:px-12 scroll-smooth min-h-0 min-w-0 custom-scrollbar flex flex-col items-center relative ${activeBatchPatches.some(p => p.status === 'pending') ? 'select-none' : ''}`} 
+          className={`flex-1 preview-content overflow-auto py-12 px-4 md:px-8 lg:px-12 scroll-smooth min-h-0 min-w-0 custom-scrollbar flex flex-col items-center relative ${activeBatchPatches.some(p => p.status === 'pending' && !p.patchedText) ? 'select-none' : ''}`} 
           ref={containerRef} 
           onMouseUp={editMode ? null : handleTextSelection} 
           onClick={editMode ? null : handleContainerClick}
@@ -1272,15 +1455,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
               onChange={(e) => setContent(e.target.value)}
               className={`flex-1 w-full min-h-[500px] p-6 text-sm font-mono bg-zinc-900/50 border border-zinc-850 rounded-2xl text-zinc-200 focus:outline-none focus:border-zinc-700 focus:ring-1 focus:ring-zinc-700 transition-all custom-scrollbar whitespace-pre-wrap leading-relaxed resize-none ${!editMode ? 'hidden' : ''}`}
             />
-            <div className={editMode ? 'hidden' : 'w-full flex flex-col'}>
-              {activeBatchPatches.length > 0 ? (
-                renderContentWithBatchDiffs()
-              ) : activePatch ? (
-                renderContentWithDiff()
-              ) : (
-                renderContentWithStagedHighlights()
-              )}
-            </div>
+            {lastRenderedContent.current}
           </div>
 
         </div>
@@ -1614,7 +1789,10 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
               )}
             </button>
             <button
-              onClick={() => setQueuedEdits([])}
+              onClick={() => {
+                saveScroll()
+                setQueuedEdits([])
+              }}
               disabled={isProcessingBatch}
               className="text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 border border-zinc-800/60 px-3.5 py-2 rounded-xl transition-colors"
             >

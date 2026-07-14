@@ -5,27 +5,76 @@
 Using a strict **Deterministic Validation Flow**, the engine replaces unpredictable LLM critique loops with rigid structural rules and targeted semantic evaluation, ensuring every module produced meets strict academic standards without hallucinations.
 
 ## ✨ Key Features & New Updates
-* **Premium Dark Glassmorphism UI:** A stunning, fully responsive dashboard built with React, Vite, and Shadcn UI. Features frosted glass cards, dynamic background gradients, and native resizable sidebars.
-* **RPM & TPM Throttling Controls:** Real-time UI controls to inject specific RPM (Requests Per Minute) and TPM (Tokens Per Minute) limits into the backend engine, ensuring graceful handling of Gemini Free Tier rate limits without crashing.
+
+### 🎨 User Interface & Interactive Review
+* **Premium Dark Glassmorphism UI:** A stunning, fully responsive dashboard built with React, Vite, and CSS. Features frosted glass cards, dynamic background gradients, and native resizable sidebars.
+* **Interactive Inline Selection Repair:** Allows editors to highlight text spans in the preview panel and trigger surgical inline edits. The engine automatically snaps selections to sentence or paragraph bounds, executes an LLM-guided validation loop, and presents a visual side-by-side diff card.
+* **Batch Selection Editing:** Enqueue multiple selection-level comments and instructions across the textbook draft, processing them concurrently in a single batch operation. Replaces tedious step-by-step editing with a unified diff review flow.
+* **Input Focus & Selection Lock:** Focus event guards combined with explicit `select-text` CSS overrides ensure that text-selection locks do not block clicking, focusing, or typing inside edit feedback textareas and buttons.
+
+### ⚡ Navigation, Performance & Layout
+* **Persistent Navigation Tab States:** Replaces conditional tab panel unmounting with persistent DOM nodes toggled via Tailwind `.hidden` classes. Tab switches preserve active scrollbar heights, selections, highlights, and local component state natively.
+* **Active Tab CPU Rendering Optimizations:** Bypasses virtual DOM diffing and component reconciliation trees when tabs are in the background. Uses React reference state tracking to cache elements, capping background tab CPU overhead at zero.
+* **Flicker-Free Action Scroll-Locking:** Integrates coordinates caching hooks that intercept actions (staging, accepting, rejecting, or retrying edits) and restore the container's exact `scrollTop` coordinate offsets before repaint, eliminating disorienting scroll jumps.
+* **Auto-Scroll Completion Badge:** Status listeners automatically trigger a smooth scroll to the top of the textbook if the user is reading near the header. If scrolled further down, it displays a floating badge: *"✨ Textbook complete! Go to top"* to let the reader return on demand.
+
+### ⚙️ Backend Engine & Pipeline Reliability
+* **Deterministic Validation Flow & Fallbacks:** Replaces unpredictable multi-agent critique loops with a deterministic Python ruleset enforcing headers, markdown hierarchy, and placeholders. The validation loop includes fallback return paths to return the last successfully generated patch string, preventing frontend infinite loaders.
+* **Graceful Reload Teardown:** Appends shutdown timeout parameters (`--timeout-graceful-shutdown 1`) to the Uvicorn web server execution command, guaranteeing active Server-Sent Events (SSE) stream closures and immediate dev server reloads on code edits.
 * **Grounding Faithfulness Auditor:** An integrated AI auditor checking drafts against curriculum source chunks (course, module, topic, and web chunks) to prevent hallucinations, enforce tool-stack boundaries, and block unsupported API claims.
 * **Context-Aware Placeholder Classification:** Smart, context-aware parser logic mapping validators and export guards to allow intentional learner-facing template slots (e.g. `[EXPECTED BEHAVIOR]`) inside labeled template examples while strictly blocking authoring markers (e.g. `[TODO]`, `[Insert code here]`).
 * **Strict Schema & Nullable Fields Validation:** Enforces rigid input contracts (`extra="forbid"`) to reject unexpected configuration parameters, while gracefully accepting both `null` and empty values (`""`, `[]`) for all optional course fields and grounding/materials arrays.
 * **Submodule Telemetry Matrix:** Real-time validation matrix tracking attempt outcomes (`1`, `2`, `3`, or `F`) per submodule across Deterministic, Grounding, and Semantic validation pipelines, fully persisted on resume and rendered dynamically on the frontend.
 * **Structured Lesson Themes (`otto2_structured`):** Supports swappable prompt layout styles. The structured theme automatically renders mapped sections (`Core Idea`, `Lesson Breakdown`, `Practical Walkthrough`, `Edge Cases`, `Common Mistakes`, `Action Items`, `Why It Matters`) while treating constraints and expert paths strictly as internal-only generation guidance.
-* **Decoupled Architecture:** 
-  * **Frontend:** Lightning-fast React SPA running on Vite.
-  * **Backend:** Robust FastAPI orchestrator managing the asynchronous AI agent loop.
-* **Deterministic Validation Flow:** Replaces unpredictable multi-agent critique with a deterministic Python ruleset that strictly enforces markdown headers, structure, and semantic templates.
-* **Knowledge Architect Wiki:** An autonomous, AI-readable Markdown knowledge base (`wiki/`) enforcing a strict Schema structure, frontmatter tracking, and deep linking for codebase documentation.
-* **Prompt Modularization:** Hardcoded AI instructions extracted into clean, maintainable Markdown files inside `src/prompts/`.
-* **Context-Grounded Generation:** Grounded lesson generation driven by a structured submodule schema containing both `title` and `content_context` (Curriculum Context).
-* **Semantic Evaluation & Targeted Patching:** Instead of rewriting entire documents, a **Semantic Evaluator** audits drafts against pedagogical constraints, and a **Patch Editor** surgically fixes broken sections.
-* **Topic Isolation & Heading Deduplication:** Ensures submodules do not leak context into each other and programmatically sanitizes top-level headings to prevent duplicate formatting.
-* **Archival State Management:** An **Archivist** compresses full lessons into high-fidelity summaries to provide continuous learning context without blowing up the token window.
-* **Automated Testing Suite:** Comprehensive suite of Mocked Unit Tests (free, fast, token-less) and Integration Tests inside the `tests/` folder using `pytest` and `MagicMock`.
-* **LLM Context Anchors:** Persistent `LLM_CONTEXT.md` documentation acting as the architectural brain for AI agents working on the codebase.
+* **Markdown and List Rendering Corrections:** Programmatically sanitizes CRLF line endings, preserves list hierarchy markers outside staging wrappers, and strips duplicate top-level heading tokens inside inline spans.
+* **Decoupled Architecture:** React SPA frontend served on Vite, fully decoupled from the asynchronous FastAPI backend engine.
+* **Knowledge Architect Wiki:** Auto-documented Markdown codebase wiki with strict metadata structures.
+* **Prompt Modularization:** System prompts extracted from source code into modular, maintainable markdown templates.
+* **Archival State Management:** An autonomous archivist summarizing completed submodules to preserve target context sizes.
+* **Automated Test Suite:** Fast, token-less testing environment using `pytest` and `unittest.mock`.
+* **LLM Context Anchors:** Architectural guidelines codified inside `LLM_CONTEXT.md`.
+
 
 ## 🏗️ Architecture
+
+```mermaid
+graph TD
+    %% Define styles
+    classDef default fill:#18181b,stroke:#27272a,color:#f4f4f5;
+    classDef agent fill:#1e1b4b,stroke:#4338ca,color:#e0e7ff;
+    classDef gate fill:#312e81,stroke:#4f46e5,color:#e0e7ff;
+    classDef frontend fill:#064e3b,stroke:#047857,color:#ecfdf5;
+
+    %% Main Pipeline Loop
+    subgraph Engine [Deterministic Generation Pipeline]
+        A(Input Course Schema) --> B(1. Generator):::agent
+        B --> C(2. Grounding Auditor):::agent
+        C --> D(3. Semantic Evaluator):::agent
+        D --> E(4. Deterministic Validation Gate):::gate
+        E -->|Fail| F(5. Patch Editor):::agent
+        F -->|Regenerate Section| C
+        E -->|Pass| G(6. Archivist):::agent
+        G --> H(Save and Compress Lesson State)
+        H -->|Append Context| B
+        H -->|Export| Export(Final Textbook Draft)
+    end
+
+    %% Frontend Edit Loop
+    subgraph Client [Interactive Selection Editing]
+        UI(Render Textbook Preview):::frontend --> Select(Select Text):::frontend
+        Select --> FloatingPopup(Floating Action Popup):::frontend
+        FloatingPopup --> Queue(Enqueue Edit Comments):::frontend
+        Queue --> BatchAPI(FastAPI /api/patch Endpoint):::frontend
+        BatchAPI --> ValidationLoop(Run Patch Validation Loop)
+        ValidationLoop --> Diffs(Render Side-by-Side Diffs):::frontend
+        Diffs --> Merge(Update Draft and Reset Scroll coordinates):::frontend
+        Diffs --> Clear(Discard Changes):::frontend
+        Diffs --> Input(Feedback Input Focus Guarded):::frontend
+        Input --> BatchAPI
+    end
+
+    Export -.-> UI
+```
 
 The engine operates on a strict **deterministic validation pipeline**:
 

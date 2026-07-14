@@ -135,15 +135,15 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-hidden relative">
-              {activeTab === 'preview' ? (
-                <PreviewPanel preview={preview} isLive={isLive} telemetry={telemetry} />
-              ) : activeTab === 'matrix' ? (
-                <div className="w-full h-full overflow-auto p-8 custom-scrollbar">
-                  <PipelineMatrix telemetry={telemetry} />
-                </div>
-              ) : (
-                <HistoryDashboard />
-              )}
+              <div className={`w-full h-full ${activeTab !== 'preview' ? 'hidden' : ''}`}>
+                <PreviewPanel preview={preview} isLive={isLive} telemetry={telemetry} isActive={activeTab === 'preview'} />
+              </div>
+              <div className={`w-full h-full overflow-auto p-8 custom-scrollbar ${activeTab !== 'matrix' ? 'hidden' : ''}`}>
+                <PipelineMatrix telemetry={telemetry} isActive={activeTab === 'matrix'} />
+              </div>
+              <div className={`w-full h-full ${activeTab !== 'history' ? 'hidden' : ''}`}>
+                <HistoryDashboard isActive={activeTab === 'history'} />
+              </div>
             </div>
           </div>
         </div>

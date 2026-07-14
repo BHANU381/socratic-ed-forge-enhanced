@@ -37,7 +37,8 @@ export function LogsPanel({ logs }) {
       
       <div className="flex-1 min-h-0 flex flex-col px-8 pb-8">
         <div className="flex-1 min-h-0 rounded border border-zinc-800 bg-zinc-900/30 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] flex flex-col">
-          <ScrollArea className="flex-1 h-full w-full" ref={termRef}>
+          <div ref={termRef} className="flex-1 h-full w-full flex flex-col">
+          <ScrollArea className="flex-1 h-full w-full">
             <div className="p-4 pr-6 font-mono text-[11px] leading-relaxed tracking-tight">
               {logs.length === 0 ? (
                 <div className="text-zinc-600">
@@ -54,6 +55,7 @@ export function LogsPanel({ logs }) {
               )}
             </div>
           </ScrollArea>
+          </div>
         </div>
       </div>
     </div>
