@@ -232,6 +232,105 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
   const [batchInstruction, setBatchInstruction] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
 
+  // Navigation rail states & hooks
+  const [activeNavId, setActiveNavId] = useState(null)
+  const [isNavOpen, setIsNavOpen] = useState(false)
+  const navTimeoutRef = useRef(null)
+
+  const handleNavMouseEnter = () => {
+    if (navTimeoutRef.current) {
+      clearTimeout(navTimeoutRef.current);
+      navTimeoutRef.current = null;
+    }
+    setIsNavOpen(true);
+  };
+
+  const handleNavMouseLeave = () => {
+    if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    navTimeoutRef.current = setTimeout(() => {
+      setIsNavOpen(false);
+    }, 300); // 300ms safety delay to prevent menu flicker
+  };
+
+  const getActiveEditsForNav = useCallback(() => {
+    const sortedEdits = [...queuedEdits]
+      .map(edit => {
+        const matchInfo = findSelectionOffset(content, edit.originalText);
+        return matchInfo ? { type: 'staged', id: edit.id, index: matchInfo.index, text: edit.instruction } : null;
+      })
+      .filter(Boolean);
+
+    const sortedPatches = activeBatchPatches
+      .filter(p => p.status === 'pending')
+      .map(patch => {
+        const matchInfo = findSelectionOffset(content, patch.originalText);
+        return matchInfo ? { type: 'diff', id: patch.id, index: matchInfo.index, text: patch.feedback || patch.originalText } : null;
+      })
+      .filter(Boolean);
+
+    return [...sortedEdits, ...sortedPatches].sort((a, b) => a.index - b.index);
+  }, [queuedEdits, activeBatchPatches, content]);
+
+  const handleScrollToEdit = (targetId) => {
+    const container = containerRef.current;
+    const target = document.getElementById(targetId);
+    if (container && target) {
+      const containerRect = container.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const relativeTop = targetRect.top - containerRect.top + container.scrollTop;
+      container.scrollTo({
+        top: relativeTop - containerRect.height / 2 + targetRect.height / 2,
+        behavior: 'smooth'
+      });
+      setActiveNavId(targetId);
+    }
+  };
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || editMode) return;
+
+    const handleScroll = () => {
+      const activeEdits = getActiveEditsForNav();
+      if (activeEdits.length === 0) return;
+
+      const containerRect = container.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
+
+      let closestId = null;
+      let closestDistance = Infinity;
+
+      activeEdits.forEach(item => {
+        const targetId = item.type === 'staged' ? `staged-card-${item.id}` : `diff-card-${item.id}`;
+        const el = document.getElementById(targetId);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          const isVisible = rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+          if (isVisible) {
+            const elCenter = rect.top + rect.height / 2;
+            const distance = Math.abs(elCenter - containerCenter);
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestId = targetId;
+            }
+          }
+        }
+      });
+
+      setActiveNavId(closestId);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    // Initial calculation check after DOM updates
+    const timer = setTimeout(handleScroll, 100);
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+      clearTimeout(timer);
+      if (navTimeoutRef.current) clearTimeout(navTimeoutRef.current);
+    };
+  }, [queuedEdits, activeBatchPatches, editMode, getActiveEditsForNav]);
+
   const saveScroll = useCallback(() => {
     if (containerRef.current) {
       scrollPosRef.current = containerRef.current.scrollTop
@@ -496,13 +595,18 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
   // Text selection handler for floating patch popup
   const handleTextSelection = useCallback((e) => {
-    // If clicking on an input or button, ignore selection handling completely
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button') || e.target.closest('input')) {
+    // If clicking on an input, button, staged card, or diff card, ignore selection handling completely
+    if (
+      e.target.closest('input') || 
+      e.target.closest('button') || 
+      e.target.closest('.staged-card-container') || 
+      e.target.closest('.diff-card-container')
+    ) {
       return
     }
 
-    // Lock selection if we are in the review/active-patch phase
-    if (activeBatchPatches.some(p => p.status === 'pending')) {
+    // Lock selection if we have active patches under review
+    if (activeBatchPatches.length > 0 || activePatch) {
       window.getSelection()?.removeAllRanges()
       return
     }
@@ -513,6 +617,19 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed) {
       // Only dismiss if click was NOT on popup (already handled above)
+      setSelectionRange(null)
+      return
+    }
+
+    // Check if the selection start or end is inside a staged card or diff card
+    const isNodeInsideCard = (node) => {
+      if (!node) return false
+      const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement
+      return element?.closest('.staged-card-container') || element?.closest('.diff-card-container')
+    }
+
+    if (isNodeInsideCard(selection.anchorNode) || isNodeInsideCard(selection.focusNode)) {
+      window.getSelection()?.removeAllRanges()
       setSelectionRange(null)
       return
     }
@@ -790,7 +907,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
         )}
         
         {/* Inline Suggestion Block - Integrated into the Main Render Flow */}
-        <div className="my-3 border-l-4 border-amber-500/70 pl-4 py-2 bg-zinc-900/10 rounded-r-xl">
+        <div className="diff-card-container my-3 border-l-4 border-amber-500/70 pl-4 py-2 bg-zinc-900/10 rounded-r-xl">
           <div className="text-[10px] uppercase font-bold text-amber-500/80 mb-2 tracking-wider select-none">
             Proposed Inline Diff
           </div>
@@ -878,50 +995,78 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
     const words = selectionText.split(/\s+/).filter(Boolean);
     if (words.length === 0) return null;
     
-    // 1. Try fuzzy regex match of the entire block
-    const escapedWords = words.map(w => w.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
-    const fuzzyPattern = escapedWords.join('[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
-    try {
-      const match = fullText.match(new RegExp(fuzzyPattern, 'i'));
-      if (match) {
-        return { index: match.index, length: match[0].length };
-      }
-    } catch (e) {}
-
-    // 2. Try phrase matching (using first 3 words to find unique index)
-    const firstPhrase = words.slice(0, Math.min(3, words.length)).join(' ');
-    const escapedPhrase = firstPhrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/\s+/g, '[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
-    
-    let idx = -1;
-    try {
-      const match = fullText.match(new RegExp(escapedPhrase, 'i'));
-      if (match) idx = match.index;
-    } catch (e) {}
-    
-    if (idx === -1) {
-      idx = fullText.indexOf(words[0]);
-    }
-    
-    if (idx !== -1) {
-      // Find the last phrase
-      const lastPhrase = words.slice(-Math.min(3, words.length)).join(' ');
-      const escapedLast = lastPhrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/\s+/g, '[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
-      let lastIdx = -1;
+    // 1. Try fuzzy regex match of the entire block (only for short selections to prevent backtracking)
+    if (words.length < 20) {
+      const escapedWords = words.map(w => w.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+      const fuzzyPattern = escapedWords.join('[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
       try {
-        const match = fullText.slice(idx).match(new RegExp(escapedLast, 'i'));
-        if (match) lastIdx = idx + match.index;
+        const match = fullText.match(new RegExp(fuzzyPattern, 'i'));
+        if (match) {
+          return { index: match.index, length: match[0].length };
+        }
       } catch (e) {}
-      
-      if (lastIdx === -1) {
-        lastIdx = fullText.indexOf(words[words.length - 1], idx + words[0].length);
+    }
+
+    // 2. Multi-occurrence distance-based candidate matching
+    const phraseLen = Math.min(3, words.length);
+    const firstPhrase = words.slice(0, phraseLen).join(' ');
+    const lastPhrase = words.slice(-phraseLen).join(' ');
+
+    const escapedFirst = firstPhrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/\s+/g, '[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
+    const escapedLast = lastPhrase.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&').replace(/\s+/g, '[\\s\\*#_\\-\\>\\[\\]\\(\\)]+');
+
+    // Find all occurrences of the first phrase
+    const firstMatches = [];
+    const firstRegex = new RegExp(escapedFirst, 'gi');
+    let m1;
+    while ((m1 = firstRegex.exec(fullText)) !== null) {
+      firstMatches.push({ index: m1.index, text: m1[0] });
+      if (firstRegex.lastIndex === m1.index) firstRegex.lastIndex++;
+    }
+
+    // Find all occurrences of the last phrase
+    const lastMatches = [];
+    const lastRegex = new RegExp(escapedLast, 'gi');
+    let m2;
+    while ((m2 = lastRegex.exec(fullText)) !== null) {
+      lastMatches.push({ index: m2.index, text: m2[0] });
+      if (lastRegex.lastIndex === m2.index) lastRegex.lastIndex++;
+    }
+
+    if (firstMatches.length > 0 && lastMatches.length > 0) {
+      let bestCandidate = null;
+      let bestDiff = Infinity;
+
+      firstMatches.forEach(fMatch => {
+        lastMatches.forEach(lMatch => {
+          if (lMatch.index >= fMatch.index) {
+            const length = lMatch.index + lMatch.text.length - fMatch.index;
+            const diff = Math.abs(length - selectionText.length);
+            // Threshold: pick candidate closest in size to the selection text, allowing space for markdown tags
+            if (diff < bestDiff && diff < selectionText.length * 0.5 + 50) {
+              bestDiff = diff;
+              bestCandidate = { index: fMatch.index, length: length };
+            }
+          }
+        });
+      });
+
+      if (bestCandidate) {
+        return bestCandidate;
       }
-      
+    }
+
+    // 3. Fallback: simple first-word and last-word search
+    const idx = fullText.indexOf(words[0]);
+    if (idx !== -1) {
+      const lastWord = words[words.length - 1];
+      const lastIdx = fullText.indexOf(lastWord, idx + words[0].length);
       const length = lastIdx !== -1 
-        ? (lastIdx + (words.slice(-Math.min(3, words.length)).join(' ').length) - idx)
+        ? (lastIdx + lastWord.length - idx)
         : selectionText.length;
-        
       return { index: idx, length: length };
     }
+
     return null;
   };
 
@@ -1123,7 +1268,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
       // 2. Render Staged Card containing the full context paragraph
       elements.push(
-        <div key={`staged-${edit.id}`} className="my-4 border-l-4 border-amber-500/50 pl-4 py-2.5 bg-zinc-900/10 rounded-r-xl w-full">
+        <div key={`staged-${edit.id}`} id={`staged-card-${edit.id}`} className="staged-card-container my-4 border-l-4 border-amber-500/50 pl-4 py-2.5 bg-zinc-900/10 rounded-r-xl w-full">
           <div className="text-[10px] uppercase font-bold text-amber-500/80 mb-1.5 tracking-wider flex items-center justify-between select-none">
             <span className="flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-amber-500" />
@@ -1221,7 +1366,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
 
       // 2. Render Interactive Inline Diff Block (showing the surrounding paragraph context)
       elements.push(
-        <div key={`diff-${patch.id}`} className="my-4 border-l-4 border-amber-500/70 pl-4 py-2 bg-zinc-900/10 rounded-r-xl w-full">
+        <div key={`diff-${patch.id}`} id={`diff-card-${patch.id}`} className="diff-card-container my-4 border-l-4 border-amber-500/70 pl-4 py-2 bg-zinc-900/10 rounded-r-xl w-full">
           <div className="text-[10px] uppercase font-bold text-amber-500/80 mb-2 tracking-wider flex items-center gap-1.5 select-none">
             <Sparkles className="w-3 h-3 text-amber-500" />
             Proposed Change
@@ -1509,7 +1654,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
                       e.target.value = ''
                     }
                   }}
-                  className="flex-1 bg-zinc-950 border border-zinc-850 rounded-lg px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 font-sans"
+                  className="flex-1 bg-zinc-950 border border-zinc-850 rounded-lg px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 font-sans select-text"
                 />
                 <button
                   onClick={(e) => {
@@ -1742,7 +1887,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
                     }}
                     disabled={chatLoading}
                     placeholder={chatLoading ? 'Assistant is typing...' : 'Type feedback...'}
-                    className="flex-1 p-2.5 text-xs bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-300 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50"
+                    className="flex-1 p-2.5 text-xs bg-zinc-950 border border-zinc-850 rounded-xl text-zinc-300 placeholder-zinc-650 focus:outline-none focus:border-zinc-700 font-sans disabled:opacity-50 select-text"
                   />
                   <button
                     onClick={handleSendChatMessage}
@@ -1757,6 +1902,82 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
           </div>
         </div>
       )}
+
+      {/* Edit Navigation Rail (Off-Screen Sliding Panel) */}
+      {!editMode && getActiveEditsForNav().length > 0 && (
+        <div 
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: '50%',
+            transform: isNavOpen ? 'translate(0px, -50%)' : 'translate(256px, -50%)',
+            transition: 'transform 300ms cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          className={`z-50 w-[280px] rounded-l-2xl flex flex-col p-4 pr-3 py-5 select-none transition-all duration-300 ${
+            isNavOpen 
+              ? 'bg-zinc-900/98 border border-zinc-800/40 shadow-[0_15px_35px_rgba(0,0,0,0.5)]' 
+              : 'bg-transparent border border-transparent shadow-none'
+          }`}
+          onMouseEnter={handleNavMouseEnter}
+          onMouseLeave={handleNavMouseLeave}
+        >
+          {/* Header Row (Only shown when expanded) */}
+          <div 
+            className={`flex items-center transition-opacity duration-300 ${
+              isNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            {/* Left spacer matching the pills column width */}
+            <div className="w-6 shrink-0" />
+            <div className="flex-grow text-[9px] uppercase font-bold text-amber-500/80 px-2 mb-1 tracking-wider border-b border-zinc-850/60 pb-1.5 flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              Requested Edits
+            </div>
+          </div>
+
+          {/* List Rows (Pills + Texts combined to guarantee vertical alignment) */}
+          <div className="flex flex-col gap-1 overflow-y-auto max-h-[50vh] custom-scrollbar">
+            {getActiveEditsForNav().map((item) => {
+              const targetId = item.type === 'staged' ? `staged-card-${item.id}` : `diff-card-${item.id}`;
+              const isActive = activeNavId === targetId;
+              return (
+                <div key={targetId} className="flex items-center">
+                  {/* Left Column: Pill (Always visible in collapsed state) */}
+                  <div className="w-6 shrink-0 flex items-center justify-center py-2">
+                    <div 
+                      className={`w-4 h-1 rounded-full transition-all duration-300 ${
+                        isActive 
+                          ? 'bg-zinc-100 shadow-[0_0_8px_rgba(255,255,255,0.75)]' 
+                          : 'bg-zinc-700/85'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Right Column: Text Button (Slides into view) */}
+                  <button
+                    onClick={() => handleScrollToEdit(targetId)}
+                    className={`flex-grow text-left px-3 py-2 rounded-xl transition-all duration-150 outline-none truncate ${
+                      isNavOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                    } ${
+                      isActive 
+                        ? 'bg-zinc-900/80 border border-zinc-800/40 text-amber-400 font-medium' 
+                        : 'text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200 border border-transparent'
+                    }`}
+                    style={{
+                      transition: 'opacity 300ms ease, background-color 150ms ease, color 150ms ease'
+                    }}
+                  >
+                    <span className="text-sm truncate max-w-[210px] font-sans leading-normal block">
+                      {item.text}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Batch Processing Dock */}
       {queuedEdits.length > 0 && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-zinc-950/80 backdrop-blur-md border border-zinc-800/80 rounded-2xl px-5 py-3.5 flex items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-[9998] animate-in slide-in-from-bottom-4 duration-300">
