@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, memo } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
-import { BookOpen, Edit3, Save, MessageSquare, X, CheckCircle, AlertTriangle, ArrowRight, Copy, Sparkles, Check, ArrowLeft } from 'lucide-react'
+import { BookOpen, Edit3, Save, MessageSquare, X, CheckCircle, AlertTriangle, ArrowRight, Copy, Sparkles, Check, ArrowLeft, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { parseSubmodules } from '@/lib/utils'
 
 const CodeBlock = ({ className, children }) => {
   const [copied, setCopied] = useState(false)
@@ -461,7 +462,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: sessionId,
-        submodule_filename: filename || `${telemetry.course_name || 'textbook'}.md`,
+        submodule_filename: getSaveFilename(),
         content: newContent
       })
     }).catch(console.error)
@@ -498,9 +499,127 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
     }
   }
 
+  const submodules = useMemo(() => parseSubmodules(preview || ''), [preview])
+  const [activePageIndex, setActivePageIndex] = useState(0)
+  const [userHasNavigated, setUserHasNavigated] = useState(false)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [reviewGranularity, setReviewGranularity] = useState('submodule') // 'submodule' | 'module'
+  const [pendingTargetIndex, setPendingTargetIndex] = useState(null)
+  const [reviewNoticeTarget, setReviewNoticeTarget] = useState(null)
+
+  // Track all forms of unsaved edits
+  const hasUnsavedEdits = editMode || queuedEdits.length > 0 || activeBatchPatches.length > 0 || activePatch !== null;
+
+  // Granular Submodule Generation Lock: lock editing ONLY if current viewed submodule is generating live
+  const isCurrentSubmoduleGenerating = useMemo(() => {
+    if (telemetry?.status !== 'Running' && telemetry?.status !== 'Initializing') return false;
+    const activeSub = submodules[activePageIndex];
+    const currentSubtopic = telemetry?.current_submodule || '';
+    if (!activeSub || !currentSubtopic) return false;
+    return activeSub.title.toLowerCase().includes(currentSubtopic.toLowerCase());
+  }, [telemetry?.status, telemetry?.current_submodule, activePageIndex, submodules]);
+
+  const getSaveFilename = () => {
+    const activeSub = submodules[activePageIndex]
+    if (activeSub && activeSub.filename) {
+      return activeSub.filename
+    }
+    return filename || `${telemetry.course_name || 'textbook'}.md`
+  }
+
+  const confirmPageChange = (targetIndex) => {
+    if (targetIndex === activePageIndex) {
+      setIsDropdownOpen(false)
+      return true
+    }
+    if (hasUnsavedEdits) {
+      setPendingTargetIndex(targetIndex)
+      setIsDropdownOpen(false)
+      return false
+    }
+    setActivePageIndex(targetIndex)
+    setIsDropdownOpen(false)
+    setUserHasNavigated(true)
+    return true
+  }
+
+  const handleSaveAndSwitch = async () => {
+    if (editMode) {
+      await handleSave()
+    }
+    setQueuedEdits([])
+    setActiveBatchPatches([])
+    setActivePatch(null)
+    if (pendingTargetIndex !== null) {
+      setActivePageIndex(pendingTargetIndex)
+      setPendingTargetIndex(null)
+      setUserHasNavigated(true)
+    }
+  }
+
+  const handleDiscardAndSwitch = () => {
+    setEditMode(false)
+    setQueuedEdits([])
+    setActiveBatchPatches([])
+    setActivePatch(null)
+    if (pendingTargetIndex !== null) {
+      setActivePageIndex(pendingTargetIndex)
+      setPendingTargetIndex(null)
+      setUserHasNavigated(true)
+    }
+  }
+
+  const handleCancelSwitch = () => {
+    setPendingTargetIndex(null)
+  }
+
+  // Reset page navigation when session changes
   useEffect(() => {
-    setContent(preview || '')
-  }, [preview])
+    setActivePageIndex(0)
+    setUserHasNavigated(false)
+    setIsDropdownOpen(false)
+    setReviewGranularity('submodule')
+    setPendingTargetIndex(null)
+    setReviewNoticeTarget(null)
+  }, [sessionId])
+
+  // Active module content calculation for 'Full Module' view
+  const activeModuleContent = useMemo(() => {
+    if (reviewGranularity === 'module' && submodules.length > 0) {
+      const activeSub = submodules[activePageIndex]
+      const activeModIdx = activeSub ? activeSub.moduleIndex : 1
+      const modSubs = submodules.filter(s => s.moduleIndex === activeModIdx && s.id !== 'toc')
+      if (modSubs.length > 0) {
+        return modSubs.map(s => s.content).join('\n\n---\n\n')
+      }
+    }
+    return submodules[activePageIndex]?.content || ''
+  }, [reviewGranularity, activePageIndex, submodules])
+
+  // Sync content state to active submodule/module when not in editMode
+  useEffect(() => {
+    if (!editMode) {
+      setContent(activeModuleContent)
+    }
+  }, [preview, activeModuleContent, editMode])
+
+  // Auto-follow live generation (suppressed if user has unsaved edits)
+  const prevSubmodulesLength = useRef(submodules.length)
+  useEffect(() => {
+    if (isLive && !userHasNavigated && !hasUnsavedEdits && submodules.length > prevSubmodulesLength.current) {
+      setActivePageIndex(submodules.length - 1)
+    }
+    prevSubmodulesLength.current = submodules.length
+  }, [submodules.length, isLive, userHasNavigated, hasUnsavedEdits])
+
+  // Review breakpoint alert tracking
+  useEffect(() => {
+    if ((isPaused || isReviewing) && hasUnsavedEdits) {
+      setReviewNoticeTarget(submodules.length - 1)
+    } else {
+      setReviewNoticeTarget(null)
+    }
+  }, [isPaused, isReviewing, hasUnsavedEdits, submodules.length])
 
   // Dismiss floating popup on external click, but track container scrolls dynamically
   useEffect(() => {
@@ -569,7 +688,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
   }, [sessionId])
 
   const handleSave = async () => {
-    if (!sessionId || !filename) return
+    if (!sessionId) return
     setIsSaving(true)
     try {
       const res = await fetch('/api/sessions/edit', {
@@ -577,7 +696,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_id: sessionId,
-          submodule_filename: filename,
+          submodule_filename: getSaveFilename(),
           content: content
         })
       })
@@ -684,7 +803,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: sessionId,
-        submodule_filename: filename || `${telemetry.course_name || 'textbook'}.md`,
+        submodule_filename: getSaveFilename(),
         content: newContent
       })
     }).catch(console.error)
@@ -790,7 +909,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: sessionId,
-        submodule_filename: filename || `${telemetry.course_name || 'textbook'}.md`,
+        submodule_filename: getSaveFilename(),
         content: newContent
       })
     }).catch(console.error)
@@ -849,7 +968,7 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             session_id: sessionId,
-            submodule_filename: filename || 'breakpoint.json',
+            submodule_filename: getSaveFilename(),
             content: content
           })
         })
@@ -1493,84 +1612,200 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
     <div className="flex flex-row h-full w-full bg-zinc-950 text-zinc-50 min-w-0 min-h-0 relative">
       {/* Main Preview Pane */}
       <div className="flex-1 flex flex-col h-full min-w-0 min-h-0 relative">
-        <div className="flex items-center gap-3 px-8 py-4 border-b border-zinc-800/50 bg-zinc-950 shrink-0 sticky top-0 z-10 shadow-sm">
-          <BookOpen className="w-4 h-4 text-zinc-400" />
-          <h2 className="text-sm font-semibold text-zinc-200 tracking-wide">
-            {editMode ? 'Edit Textbook Markdown' : 'Live Book Preview'}
-          </h2>
-          {isLive && (
-            <Badge variant="outline" className="ml-2 bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] tracking-widest px-2.5 py-0 h-5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5 inline-block" />
-              LIVE DRAFT
-            </Badge>
-          )}
+        {/* Sticky Top Header Container */}
+        <div className="flex flex-col border-b border-zinc-800/60 bg-zinc-950/95 backdrop-blur-md shrink-0 sticky top-0 z-10 shadow-sm">
+          {/* Top Row: Title, Badges & Actions */}
+          <div className="flex items-center justify-between px-8 py-3 border-b border-zinc-900/80">
+            <div className="flex items-center gap-3 min-w-0">
+              <BookOpen className="w-4 h-4 text-emerald-400 shrink-0" />
+              <h2 className="text-sm font-bold text-zinc-100 tracking-wide truncate">
+                {editMode ? 'Edit Textbook Markdown' : 'Live Book Preview'}
+              </h2>
+              {isLive && (
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px] tracking-widest px-2.5 py-0.5 h-5 rounded-full shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-1.5 inline-block" />
+                  LIVE DRAFT
+                </Badge>
+              )}
 
-          {isPaused && (
-            <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] tracking-widest px-2.5 py-0 h-5 rounded-full flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" />
-              PAUSED FOR REPAIR
-            </Badge>
-          )}
+              {isPaused && (
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] tracking-widest px-2.5 py-0.5 h-5 rounded-full flex items-center gap-1 shrink-0">
+                  <AlertTriangle className="w-3 h-3" />
+                  PAUSED FOR REPAIR
+                </Badge>
+              )}
 
-          {isReviewing && (
-            <Badge variant="outline" className="ml-2 bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] tracking-widest px-2.5 py-0 h-5 rounded-full flex items-center gap-1 animate-pulse">
-              <AlertTriangle className="w-3 h-3" />
-              PAUSED FOR REVIEW
-            </Badge>
-          )}
+              {isReviewing && (
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px] tracking-widest px-2.5 py-0.5 h-5 rounded-full flex items-center gap-1 animate-pulse shrink-0">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  PAUSED FOR REVIEW
+                </Badge>
+              )}
+            </div>
 
-          <div className="flex-1" />
-
-          {/* Action buttons */}
-          <div className="flex gap-2">
-            {editMode ? (
-              <>
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              {editMode ? (
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="text-xs bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {isSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    onClick={() => { setEditMode(false); setContent(submodules[activePageIndex]?.content || '') }}
+                    className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-700/50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="text-xs bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                  onClick={() => setEditMode(true)}
+                  disabled={isCurrentSubmoduleGenerating}
+                  className="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-800/80 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={isCurrentSubmoduleGenerating ? 'Editing disabled: AI is currently generating this submodule live' : 'Edit this module'}
                 >
-                  <Save className="w-3.5 h-3.5" />
-                  {isSaving ? 'Saving…' : 'Save'}
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit
                 </button>
+              )}
+
+              {(isPaused || isReviewing) && (
                 <button
-                  onClick={() => { setEditMode(false); setContent(preview) }}
-                  className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-700/50 transition-colors"
+                  onClick={() => setShowChat(!showChat)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${showChat ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800/80'}`}
                 >
-                  Cancel
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  {isPaused ? 'Repair Chat' : 'Review Chat'}
                 </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setEditMode(true)}
-                className="text-xs bg-zinc-900 hover:bg-zinc-800 text-zinc-300 px-3 py-1.5 rounded-lg border border-zinc-800/80 transition-colors flex items-center gap-1.5"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                Edit
-              </button>
-            )}
+              )}
 
-            {(isPaused || isReviewing) && (
-              <button
-                onClick={() => setShowChat(!showChat)}
-                className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${showChat ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border-zinc-800/80'}`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                {isPaused ? 'Repair Chat' : 'Review Chat'}
-              </button>
-            )}
-
-            {isReviewing && (
-              <button
-                onClick={handleApproveModule}
-                disabled={isApproving}
-                className="text-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-emerald-500 hover:to-emerald-600 text-zinc-950 font-bold px-4 py-1.5 rounded-lg transition-all duration-300 flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.15)] active:scale-95 disabled:opacity-50"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                {isApproving ? 'Approving...' : 'Approve & Continue'}
-              </button>
-            )}
+              {isReviewing && (
+                <button
+                  onClick={handleApproveModule}
+                  disabled={isApproving}
+                  className="text-xs bg-gradient-to-r from-amber-500 to-amber-600 hover:from-emerald-500 hover:to-emerald-600 text-zinc-950 font-bold px-4 py-1.5 rounded-lg transition-all duration-300 flex items-center gap-1.5 shadow-[0_0_10px_rgba(245,158,11,0.15)] active:scale-95 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  {isApproving ? 'Approving...' : 'Approve & Continue'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Bottom Row: Navigation, Granularity Pill & Dropdown */}
+          {submodules.length > 1 && (
+            <div className="flex items-center justify-between px-8 py-2.5 bg-zinc-900/30">
+              {/* Left: View Granularity Mode Segmented Switch */}
+              <div className="flex items-center bg-zinc-950 border border-zinc-800/80 rounded-xl p-1 shrink-0 text-xs font-semibold select-none shadow-inner">
+                <button
+                  onClick={() => setReviewGranularity('submodule')}
+                  className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                    reviewGranularity === 'submodule'
+                      ? 'bg-zinc-800 text-emerald-400 shadow-sm border border-zinc-700/50'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>📄</span> Submodule View
+                </button>
+                <button
+                  onClick={() => setReviewGranularity('module')}
+                  className={`px-3 py-1 rounded-lg transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+                    reviewGranularity === 'module'
+                      ? 'bg-zinc-800 text-emerald-400 shadow-sm border border-zinc-700/50'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <span>📁</span> Full Module View
+                </button>
+              </div>
+
+              {/* Right: Paginator Controls */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => confirmPageChange(Math.max(0, activePageIndex - 1))}
+                  disabled={activePageIndex === 0}
+                  className="p-1.5 hover:bg-zinc-850 bg-zinc-900 rounded-lg text-zinc-400 border border-zinc-800/80 disabled:opacity-30 disabled:hover:bg-zinc-900 transition-colors"
+                  title="Previous Submodule"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                {/* Hierarchical Grouped Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                    className="flex items-center justify-between gap-3 px-3.5 py-1.5 text-xs font-semibold text-zinc-200 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-850 hover:border-zinc-700 transition-all select-none min-w-[260px] max-w-[440px] shadow-sm"
+                  >
+                    <span className="truncate whitespace-nowrap">
+                      {reviewGranularity === 'module'
+                        ? `📁 ${submodules[activePageIndex]?.moduleTitle || 'Module'} (Chapter View)`
+                        : submodules[activePageIndex]?.title}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-zinc-400 shrink-0 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsDropdownOpen(false)} />
+                      <div className="absolute right-0 mt-1.5 w-84 max-h-80 overflow-y-auto bg-zinc-950/98 border border-zinc-800/80 rounded-xl shadow-2xl z-50 p-2 backdrop-blur-md custom-scrollbar origin-top animate-in fade-in slide-in-from-top-1 duration-100">
+                        {Object.entries(
+                          submodules.reduce((acc, sub, idx) => {
+                            const groupKey = sub.moduleTitle || 'Introduction';
+                            if (!acc[groupKey]) acc[groupKey] = [];
+                            acc[groupKey].push({ sub, idx });
+                            return acc;
+                          }, {})
+                        ).map(([modTitle, items]) => (
+                          <div key={modTitle} className="mb-2 last:mb-0">
+                            <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 uppercase tracking-wider bg-zinc-900/70 rounded-md mb-1 font-mono flex items-center gap-1.5">
+                              <span>📁</span> {modTitle}
+                            </div>
+                            {items.map(({ sub, idx }) => (
+                              <button
+                                key={sub.id}
+                                onClick={() => confirmPageChange(idx)}
+                                className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-between ${idx === activePageIndex ? 'bg-emerald-500/10 text-emerald-400 font-semibold' : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'}`}
+                              >
+                                <span className="truncate pl-2 font-sans">{sub.title}</span>
+                                {idx === activePageIndex && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 ml-2" />}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => confirmPageChange(Math.min(submodules.length - 1, activePageIndex + 1))}
+                  disabled={activePageIndex === submodules.length - 1}
+                  className="p-1.5 hover:bg-zinc-850 bg-zinc-900 rounded-lg text-zinc-400 border border-zinc-800/80 disabled:opacity-30 disabled:hover:bg-zinc-900 transition-colors"
+                  title="Next Submodule"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                
+                {userHasNavigated && isLive && (
+                  <button
+                    onClick={() => {
+                      setUserHasNavigated(false)
+                      setActivePageIndex(submodules.length - 1)
+                    }}
+                    className="ml-2 text-[10px] font-bold text-emerald-400 hover:text-emerald-350 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition-all uppercase tracking-wider whitespace-nowrap"
+                    title="Resume auto-scrolling with new generation draft"
+                  >
+                    Follow Live
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {showCompletionBadge && (
@@ -1994,8 +2229,9 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
           <div className="flex items-center gap-2">
             <button
               onClick={handleProcessBatchEdits}
-              disabled={isProcessingBatch}
-              className="text-xs font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-40 text-zinc-950 px-4 py-2 rounded-xl transition-all shadow-md active:scale-95 duration-100 flex items-center gap-1.5"
+              disabled={isProcessingBatch || isCurrentSubmoduleGenerating}
+              className="text-xs font-bold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-40 text-zinc-950 px-4 py-2 rounded-xl transition-all shadow-md active:scale-95 duration-100 flex items-center gap-1.5 disabled:cursor-not-allowed"
+              title={isCurrentSubmoduleGenerating ? 'Batch processing disabled: AI is currently generating this submodule live' : 'Process edits'}
             >
               {isProcessingBatch ? (
                 <>
@@ -2019,6 +2255,42 @@ export const PreviewPanel = memo(function PreviewPanel({ preview, isLive, teleme
             >
               Clear Queue
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Intercept Modal for Unsaved Edits */}
+      {pendingTargetIndex !== null && (
+        <div className="fixed inset-0 bg-zinc-950/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-amber-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="text-base font-bold text-zinc-100 font-sans">Unsaved Edits in Progress</h3>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed font-sans">
+              You have active or un-applied edits (manual typing, queued AI patches, or staged highlights) on this section. How would you like to proceed?
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={handleSaveAndSwitch}
+                className="w-full py-2.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" />
+                Save / Apply Edits & Switch
+              </button>
+              <button
+                onClick={handleDiscardAndSwitch}
+                className="w-full py-2.5 px-4 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-semibold text-xs rounded-xl transition-colors"
+              >
+                Discard Edits & Switch
+              </button>
+              <button
+                onClick={handleCancelSwitch}
+                className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 text-xs rounded-xl transition-colors border border-zinc-700/50"
+              >
+                Cancel & Keep Editing
+              </button>
+            </div>
           </div>
         </div>
       )}

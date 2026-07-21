@@ -214,7 +214,7 @@ def get_prompt_themes():
 
 @app.post("/api/start")
 async def start_pipeline(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
     rpm_limit: Optional[int] = Form(None),
     tpm_limit: Optional[int] = Form(None),
     prompt_theme: Optional[str] = Form(None),
@@ -224,49 +224,152 @@ async def start_pipeline(
     quality_profile: Optional[str] = Form(None),
     enable_google_search: Optional[bool] = Form(None),
     review_granularity: Optional[str] = Form(None),
-    resume: Optional[bool] = Form(None)
+    resume: Optional[bool] = Form(None),
+    session_id: Optional[str] = Form(None),
+    session_name: Optional[str] = Form(None)
 ):
     pid = _get_pid()
     if pid and _is_running(pid):
         raise HTTPException(status_code=409, detail="Pipeline already running.")
 
-    INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    file_bytes = await file.read()
-    try:
-        data = json.loads(file_bytes)  # Validate JSON
-        if prompt_theme is not None:
-            data["prompt_theme"] = prompt_theme
-        if learner_level is not None:
-            data["learner_level"] = learner_level
-        if code_example_style is not None:
-            data["code_example_style"] = code_example_style
-        if explanation_depth is not None:
-            data["explanation_depth"] = explanation_depth
-        if quality_profile is not None:
-            data["quality_profile"] = quality_profile
-        if enable_google_search is not None:
-            data["enable_google_search"] = enable_google_search
-        if review_granularity is not None:
-            data["review_granularity"] = review_granularity
+    # 1. Validation & path traversal guards
+    if resume:
+        if not session_id:
+            # Auto-detect latest incomplete session
+            latest_session_dir = None
+            if OUTPUT_DIR.exists():
+                session_folders = sorted(OUTPUT_DIR.glob("session_*"))
+                for s_dir in reversed(session_folders):
+                    manifest_file = s_dir / "run_manifest.json"
+                    if manifest_file.exists():
+                        try:
+                            with open(manifest_file, "r", encoding="utf-8") as f:
+                                manifest_data = json.load(f)
+                            if manifest_data.get("status") != "Completed":
+                                latest_session_dir = s_dir
+                                break
+                        except Exception:
+                            pass
+                    else:
+                        latest_session_dir = s_dir
+                        break
+            if latest_session_dir:
+                session_id = latest_session_dir.name
+
+        if session_id:
+            import re
+            if not re.match(r"^session_\d{8}_\d{6}$", session_id):
+                raise HTTPException(status_code=400, detail="Invalid session_id format.")
             
-        # Validate schema and normalize it to ensure the structure is correct
+            session_dir = OUTPUT_DIR / session_id
+            try:
+                resolved_session_dir = session_dir.resolve()
+                resolved_output_dir = OUTPUT_DIR.resolve()
+                os.path.commonpath([resolved_output_dir, resolved_session_dir])
+                if resolved_output_dir not in resolved_session_dir.parents and resolved_session_dir != resolved_output_dir:
+                    raise ValueError("Path traversal detected")
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid session path.")
+
+            if not session_dir.exists() or not session_dir.is_dir():
+                raise HTTPException(status_code=404, detail="Session directory not found.")
+                
+            manifest_file = session_dir / "run_manifest.json"
+            if manifest_file.exists():
+                try:
+                    with open(manifest_file, "r", encoding="utf-8") as f:
+                        manifest_data = json.load(f)
+                    if manifest_data.get("status") == "Completed":
+                        raise HTTPException(status_code=400, detail="Cannot resume a completed session.")
+                except HTTPException:
+                    raise
+                except Exception:
+                    pass
+    else:
+        if not file:
+            raise HTTPException(status_code=400, detail="Configuration file is required to start a new generation.")
+
+    INPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 2. Load the course structure data
+    if file:
+        file_bytes = await file.read()
+        try:
+            data = json.loads(file_bytes)
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
+    elif resume and session_id:
+        session_dir = OUTPUT_DIR / session_id
+        config_path = session_dir / "course_input.json"
+        if not config_path.exists():
+            config_path = INPUT_DIR / "course_input.json"
+        if not config_path.exists():
+            raise HTTPException(status_code=404, detail="Session configuration file not found.")
+        try:
+            data = json.loads(config_path.read_text(encoding='utf-8'))
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Corrupted session configuration JSON: {e}")
+    elif resume:
+        config_path = INPUT_DIR / "course_input.json"
+        if not config_path.exists():
+            raise HTTPException(status_code=404, detail="Session configuration file not found.")
+        try:
+            data = json.loads(config_path.read_text(encoding='utf-8'))
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Corrupted session configuration JSON: {e}")
+    else:
+        raise HTTPException(status_code=400, detail="Configuration file is required to start a new generation.")
+
+    # 3. Apply settings overrides
+    if prompt_theme is not None: data["prompt_theme"] = prompt_theme
+    if learner_level is not None: data["learner_level"] = learner_level
+    if code_example_style is not None: data["code_example_style"] = code_example_style
+    if explanation_depth is not None: data["explanation_depth"] = explanation_depth
+    if quality_profile is not None: data["quality_profile"] = quality_profile
+    if enable_google_search is not None: data["enable_google_search"] = enable_google_search
+    if review_granularity is not None: data["review_granularity"] = review_granularity
+
+    # 4. Normalize & Validate Course Input
+    try:
         from src.models.schemas import normalize_course_input
         normalize_course_input(data)
-        
-        # Rewrite the modified data to file_bytes to be saved
-        file_bytes = json.dumps(data, indent=4).encode('utf-8')
-    except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON: {e}")
     except Exception as e:
         from pydantic import ValidationError
         if isinstance(e, (ValidationError, ValueError)):
             raise HTTPException(status_code=422, detail=f"Schema Validation Failed: {e}")
         raise HTTPException(status_code=400, detail=f"Validation error: {e}")
 
+    # 5. Write the resolved config file back to its correct location
     config_path = INPUT_DIR / "course_input.json"
-    
-    # Non-blocking IO to write the file
-    await asyncio.to_thread(config_path.write_bytes, file_bytes)
+    config_path.write_text(json.dumps(data, indent=4), encoding='utf-8')
+    if resume and session_id:
+        session_dir = OUTPUT_DIR / session_id
+        if session_dir.exists():
+            s_config_path = session_dir / "course_input.json"
+            s_config_path.write_text(json.dumps(data, indent=4), encoding='utf-8')
+    elif not resume:
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        session_id = f"session_{timestamp}"
+        session_dir = OUTPUT_DIR / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        
+        s_config_path = session_dir / "course_input.json"
+        s_config_path.write_text(json.dumps(data, indent=4), encoding='utf-8')
+        
+        m_name = session_name or data.get("course_title") or data.get("title") or "New Course Session"
+        initial_manifest = {
+            "course_id": data.get("course_title") or "Unknown",
+            "topic": data.get("course_context") or "Course Generation",
+            "quality_profile": quality_profile or data.get("quality_profile", "standard"),
+            "completed_submodules": [],
+            "status": "Running",
+            "session_name": m_name,
+            "running_summary": ""
+        }
+        manifest_file = session_dir / "run_manifest.json"
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            json.dump(initial_manifest, f, indent=2)
 
     # Clean up any leftover stop flag from previous run
     try: STOP_FLAG.unlink()
@@ -292,24 +395,21 @@ async def start_pipeline(
     env = os.environ.copy()
     env["PYTHONPATH"] = str(PROJECT_ROOT)
     env["RUN_TYPE"] = "resume_existing_run" if resume else "new_run"
+    if session_id:
+        env["SESSION_ID"] = session_id
     if rpm_limit is not None:
         env["RPM_LIMIT"] = str(rpm_limit)
     if tpm_limit is not None:
         env["TPM_LIMIT"] = str(tpm_limit)
 
-    # Use the standard sys.executable. To ensure this works perfectly across all OSes
-    # and environments (venv, poetry, global), the app should be launched via 
-    # `python -m uvicorn` rather than the `uvicorn` wrapper binary.
     proc = subprocess.Popen(
         [sys.executable, "-m", "src.engine.orchestrator"],
         cwd=str(PROJECT_ROOT),
         env=env,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP  # Windows: enables /T tree kill
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
     )
 
-    # Write PID immediately
     PID_FILE.write_text(str(proc.pid))
-
     return JSONResponse({"status": "started", "pid": proc.pid})
 
 @app.post("/api/stop")
@@ -326,8 +426,31 @@ def stop_pipeline():
         _cleanup_after_stop()
         return JSONResponse({"status": "already_stopped", "detail": "Process was not alive."})
 
+    # Find the active session ID before killing the process
+    active_session_id = None
+    try:
+        if TELEMETRY_FILE.exists():
+            tel_data = _read_json(TELEMETRY_FILE)
+            active_session_id = tel_data.get("session_id")
+    except Exception:
+        pass
+
     # Layers 1-3: Kill process tree
     _kill_process_tree(pid)
+    time.sleep(0.5) # Wait for filesystem lock release
+
+    # Update manifest status to Stopped on disk
+    if active_session_id:
+        manifest_path = OUTPUT_DIR / active_session_id / "run_manifest.json"
+        if manifest_path.exists():
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    manifest_data = json.load(f)
+                manifest_data["status"] = "Stopped"
+                with open(manifest_path, "w", encoding="utf-8") as f:
+                    json.dump(manifest_data, f, indent=2)
+            except Exception as e:
+                print(f"Failed to save Stopped status to manifest: {e}")
 
     # Final check
     still_alive = _is_running(pid) if pid else False
@@ -721,24 +844,53 @@ def chat_with_agent(payload: ChatPayload):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/sessions")
-def get_sessions():
+def get_sessions(offset: int = 0, limit: int = 10):
     sessions = []
+    
+    # Check if a process is active
+    active_pid = _get_pid()
+    active_session_id = None
+    if active_pid and _is_running(active_pid):
+        try:
+            if TELEMETRY_FILE.exists():
+                tel_data = _read_json(TELEMETRY_FILE)
+                active_session_id = tel_data.get("session_id")
+        except Exception:
+            pass
+
     if OUTPUT_DIR.exists():
-        for p in OUTPUT_DIR.iterdir():
-            if p.is_dir():
-                manifest_path = p / "run_manifest.json"
-                metadata = {}
-                if manifest_path.exists():
-                    try:
-                        with open(manifest_path, "r", encoding="utf-8") as f:
-                            metadata = json.load(f)
-                    except Exception:
-                        pass
-                sessions.append({
-                    "session_id": p.name,
-                    "metadata": metadata
-                })
-    return JSONResponse({"sessions": sessions})
+        # Get all session directories and sort them descending by name (latest first)
+        session_dirs = [p for p in OUTPUT_DIR.iterdir() if p.is_dir() and p.name.startswith("session_")]
+        session_dirs.sort(key=lambda x: x.name, reverse=True)
+        
+        # Apply pagination slice
+        paginated_dirs = session_dirs[offset : offset + limit]
+        
+        for p in paginated_dirs:
+            manifest_path = p / "run_manifest.json"
+            metadata = {}
+            if manifest_path.exists():
+                try:
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                        
+                    # Perform status reconciliation for zombie running states
+                    current_status = metadata.get("status", "Unknown")
+                    if current_status in ["Running", "Initializing", "paused_for_review", "paused_for_repair"]:
+                        # If this is not the active running session, it must have been stopped/interrupted
+                        if p.name != active_session_id:
+                            metadata["status"] = "Stopped"
+                            # Save reconciled status back to manifest file
+                            with open(manifest_path, "w", encoding="utf-8") as f:
+                                json.dump(metadata, f, indent=2)
+                except Exception:
+                    pass
+            sessions.append({
+                "session_id": p.name,
+                "metadata": metadata
+            })
+    
+    return JSONResponse({"sessions": sessions, "has_more": offset + limit < len(session_dirs) if OUTPUT_DIR.exists() else False})
 
 def _recompile_session_master(session_dir: Path):
     from src.engine.orchestrator import compile_master_file

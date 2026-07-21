@@ -320,11 +320,16 @@ class Orchestrator:
             self._recalculate_telemetry_summaries()
 
     def load_running_summary(self) -> str:
-        if self.session_dir:
-            summary_file = self.session_dir / "running_summary.md"
-            if summary_file.exists():
-                return summary_file.read_text(encoding="utf-8")
-        return ""
+        try:
+            manifest = self.load_or_create_manifest()
+            if manifest.running_summary:
+                return manifest.running_summary
+            summary_md = self.session_dir / "running_summary.md"
+            if summary_md.exists():
+                return summary_md.read_text(encoding="utf-8")
+            return ""
+        except Exception:
+            return ""
 
     def _recalculate_telemetry_summaries(self):
         self.telemetry["passed_1st_iteration"] = 0
@@ -407,13 +412,19 @@ class Orchestrator:
 
     def load_or_create_manifest(self) -> RunManifest:
         manifest_path = self.session_dir / "run_manifest.json"
+        existing_data = {}
         if manifest_path.exists():
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+            try:
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+            except Exception:
+                pass
+
+        if "course_id" in existing_data and "lesson_contract" in existing_data:
             # Detect configuration mismatches
-            if data.get("topic") != self.course.course_context or data.get("quality_profile") != self.quality_profile.value:
-                raise ValueError(f"Configuration mismatch: Manifest topic '{data.get('topic')}' or quality_profile '{data.get('quality_profile')}' does not match current topic '{self.course.course_context}' or quality_profile '{self.quality_profile.value}'.")
-            return RunManifest.model_validate(data)
+            if existing_data.get("topic") != self.course.course_context or existing_data.get("quality_profile") != self.quality_profile.value:
+                raise ValueError(f"Configuration mismatch: Manifest topic '{existing_data.get('topic')}' or quality_profile '{existing_data.get('quality_profile')}' does not match current topic '{self.course.course_context}' or quality_profile '{self.quality_profile.value}'.")
+            return RunManifest.model_validate(existing_data)
         else:
             manifest = RunManifest(
                 course_id=self.course.course_title,
@@ -422,6 +433,12 @@ class Orchestrator:
                 quality_profile=self.quality_profile.value,
                 completed_submodules=[]
             )
+            if "session_name" in existing_data:
+                manifest.session_name = existing_data["session_name"]
+            if "status" in existing_data:
+                manifest.status = existing_data["status"]
+            if "running_summary" in existing_data:
+                manifest.running_summary = existing_data["running_summary"]
             self.save_manifest(manifest)
             return manifest
 
@@ -1153,6 +1170,12 @@ class Orchestrator:
             
         self.telemetry["status"] = "paused_for_review"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        try:
+            manifest = self.load_or_create_manifest()
+            manifest.status = "paused_for_review"
+            self.save_manifest(manifest)
+        except Exception:
+            pass
         
         if self.interactive:
             log_event("Orchestrator", f"Module {m_idx+1} complete. Paused for review.")
@@ -1172,6 +1195,12 @@ class Orchestrator:
         
         self.telemetry["status"] = "Running"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        try:
+            manifest = self.load_or_create_manifest()
+            manifest.status = "Running"
+            self.save_manifest(manifest)
+        except Exception:
+            pass
 
     def trigger_manual_repair(self, submodule, module_title, module_context, running_summary, module_position, blockers, draft, sub_title):
         import sys
@@ -1191,6 +1220,12 @@ class Orchestrator:
             
         self.telemetry["status"] = "paused_for_repair"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        try:
+            manifest = self.load_or_create_manifest()
+            manifest.status = "paused_for_repair"
+            self.save_manifest(manifest)
+        except Exception:
+            pass
         
         log_event("Orchestrator", f"Validation failed. Pipeline paused for manual repair on '{sub_title}'.")
         
@@ -1212,6 +1247,12 @@ class Orchestrator:
                 
                 self.telemetry["status"] = "Running"
                 update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+                try:
+                    manifest = self.load_or_create_manifest()
+                    manifest.status = "Running"
+                    self.save_manifest(manifest)
+                except Exception:
+                    pass
                 
                 if resolution == "force_approve":
                     log_event("Orchestrator", f"User force approved submodule '{sub_title}'.")
@@ -1266,6 +1307,8 @@ class Orchestrator:
         update_live_preview(self.session_dir, self.master_file)
         self.telemetry["status"] = "Running"
         update_telemetry(self.telemetry, session_dir=str(self.session_dir))
+        manifest.status = "Running"
+        self.save_manifest(manifest)
         
         total_submodules = sum(len(mod.topics) for mod in self.course.modules)
         running_summary = self.load_running_summary()
@@ -1389,7 +1432,8 @@ class Orchestrator:
                         running_summary=running_summary
                     )
                     running_summary += f"\n- {sub.topic_title}: {summary_text.strip()}"
-                    (self.session_dir / "running_summary.md").write_text(running_summary, encoding="utf-8")
+                    manifest.running_summary = running_summary
+                    self.save_manifest(manifest)
                     self.update_agent_tokens("archivist", self.archivist)
                     log_event("Archivist", f"Processed: Submodule compressed successfully. Summary preview: {summary_text[:100]}...")
                 except Exception as e:
@@ -1442,11 +1486,17 @@ class Orchestrator:
             update_status(f"Export Contaminated: {error_msg}", session_dir=str(session_dir))
             self.telemetry["status"] = "failed_export_contaminated"
             update_telemetry(self.telemetry, session_dir=str(session_dir))
+            try:
+                manifest.status = "failed_export_contaminated"
+                self.save_manifest(manifest)
+            except Exception:
+                pass
             return
 
         # Complete
         manifest.per_agent_tokens = self.telemetry["per_agent_tokens"]
         manifest.total_tokens = self.telemetry["total_tokens"]
+        manifest.status = "Completed"
         self.save_manifest(manifest)
         update_status("Generation Complete! Book Created.", session_dir=str(session_dir))
         log_event("System", "Course generation pipeline finished successfully.", session_dir=str(session_dir))
@@ -1458,13 +1508,58 @@ def main() -> None:
         print("CRITICAL ERROR: GEMINI_API_KEY not found in environment. Please check your .env file.")
         return
 
-    input_path = PROJECT_ROOT / 'data' / 'input' / 'course_input.json'
     output_dir_env = os.environ.get("OUTPUT_DIR")
     if output_dir_env:
         output_dir = Path(output_dir_env)
     else:
         output_dir = PROJECT_ROOT / 'data' / 'output'
+
+    run_type = os.environ.get("RUN_TYPE", "new_run")
+    session_id = os.environ.get("SESSION_ID")
+
+    latest_session_dir = None
+    input_path = None
+
+    if run_type == "resume_existing_run":
+        if session_id:
+            s_dir = output_dir / session_id
+            if s_dir.exists() and s_dir.is_dir():
+                latest_session_dir = s_dir
+                if (latest_session_dir / "course_input.json").exists():
+                    input_path = latest_session_dir / "course_input.json"
+        
+        # Fallback to scanning for latest incomplete session if not specified or missing course_input.json
+        if not latest_session_dir or not input_path:
+            fallback_input_path = PROJECT_ROOT / 'data' / 'input' / 'course_input.json'
+            if fallback_input_path.exists():
+                try:
+                    g_data = json.loads(fallback_input_path.read_text(encoding='utf-8'))
+                    g_course = normalize_course_input(g_data)
+                    session_folders = sorted(output_dir.glob("session_*"))
+                    for s_dir in reversed(session_folders):
+                        manifest_file = s_dir / "run_manifest.json"
+                        if manifest_file.exists():
+                            try:
+                                with open(manifest_file, "r", encoding="utf-8") as f:
+                                    m_data = json.load(f)
+                                total_sub = sum(len(m.topics) for m in g_course.modules)
+                                if m_data.get("topic") == g_course.course_context and len(m_data.get("completed_submodules", [])) < total_sub:
+                                    latest_session_dir = s_dir
+                                    if (latest_session_dir / "course_input.json").exists():
+                                        input_path = latest_session_dir / "course_input.json"
+                                    else:
+                                        input_path = fallback_input_path
+                                    print(f"Found incomplete session fallback: {latest_session_dir}")
+                                    break
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
     
+    # If not resume, or fallback failed, default to standard input path
+    if not input_path:
+        input_path = PROJECT_ROOT / 'data' / 'input' / 'course_input.json'
+
     if not input_path.exists():
         print(f"ERROR: Input file not found at {input_path}")
         return
@@ -1472,7 +1567,7 @@ def main() -> None:
     try:
         data = json.loads(input_path.read_text(encoding='utf-8'))
     except json.JSONDecodeError as e:
-        print(f"CRITICAL ERROR: course_input.json is invalid JSON: {e}")
+        print(f"CRITICAL ERROR: {input_path.name} is invalid JSON: {e}")
         return
 
     try:
@@ -1481,33 +1576,26 @@ def main() -> None:
         print(f"CRITICAL ERROR: Course Input Schema Validation Failed:\n{e}")
         return
 
-    # Check for incomplete manifest to resume
-    run_type = os.environ.get("RUN_TYPE", "new_run")
-    latest_session_dir = None
-    
-    if run_type == "resume_existing_run":
-        session_folders = sorted(output_dir.glob("session_*"))
-        for s_dir in reversed(session_folders):
-            manifest_file = s_dir / "run_manifest.json"
-            if manifest_file.exists():
-                try:
-                    with open(manifest_file, "r", encoding="utf-8") as f:
-                        m_data = json.load(f)
-                    total_sub = sum(len(m.topics) for m in course.modules)
-                    if m_data.get("topic") == course.course_context and len(m_data.get("completed_submodules", [])) < total_sub:
-                        latest_session_dir = s_dir
-                        print(f"Found incomplete session to resume: {latest_session_dir}")
-                        break
-                except Exception:
-                    pass
-                
     if latest_session_dir:
         session_dir = latest_session_dir
+        print(f"Resuming existing session in: {session_dir}")
+    elif session_id:
+        session_dir = output_dir / session_id
+        session_dir.mkdir(parents=True, exist_ok=True)
+        print(f"Initializing new pre-created session in: {session_dir}")
+        try:
+            (session_dir / "course_input.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
+        except Exception as e:
+            print(f"WARNING: Failed to write course_input.json copy: {e}")
     else:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         session_dir = output_dir / f"session_{timestamp}"
         session_dir.mkdir(parents=True, exist_ok=True)
         print(f"Initializing new session in: {session_dir}")
+        try:
+            (session_dir / "course_input.json").write_text(json.dumps(data, indent=4), encoding="utf-8")
+        except Exception as e:
+            print(f"WARNING: Failed to write course_input.json copy: {e}")
 
     orchestrator = Orchestrator(course, session_dir, run_type=run_type, interactive=True)
     orchestrator.run_course_pipeline()

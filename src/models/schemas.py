@@ -156,6 +156,9 @@ class RunManifest(BaseModel):
     total_tokens: Optional[int] = 0
     per_agent_tokens: Optional[Dict[str, int]] = None
     completed_submodules: List[str] = Field(default_factory=list)
+    status: str = "Initializing"
+    running_summary: str = ""
+    session_name: Optional[str] = None
 
 
 # Modern models for Course Structure configuration

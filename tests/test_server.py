@@ -221,3 +221,60 @@ def test_api_sessions_preview(tmp_path, monkeypatch):
     assert response.json().get("content") == "Full Textbook Markdown Content"
 
 
+def test_start_pipeline_with_custom_session_name(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.server.INPUT_DIR", tmp_path)
+    monkeypatch.setattr("backend.server.OUTPUT_DIR", tmp_path)
+    monkeypatch.setattr("backend.server._get_pid", lambda: None)
+    
+    valid_data = {
+        "course_name": "Test Naming",
+        "topic": "Testing Custom Session Name",
+        "duration_weeks": 2,
+        "modules": []
+    }
+    
+    from unittest.mock import MagicMock
+    mock_proc = MagicMock()
+    mock_proc.pid = 44444
+    captured_env = {}
+    
+    def mock_popen(args, env, **kwargs):
+        nonlocal captured_env
+        captured_env = env
+        return mock_proc
+        
+    monkeypatch.setattr("backend.server.subprocess.Popen", mock_popen)
+    
+    response = client.post(
+        "/api/start",
+        files={"file": ("course_input.json", json.dumps(valid_data).encode("utf-8"), "application/json")},
+        data={
+            "resume": "false",
+            "session_name": "Super Custom Session Name 123"
+        }
+    )
+    
+    assert response.status_code == 200
+    assert response.json() == {"status": "started", "pid": 44444}
+    
+    # Verify a session directory was pre-created and populated
+    session_id = captured_env.get("SESSION_ID")
+    assert session_id is not None
+    assert session_id.startswith("session_")
+    
+    session_dir = tmp_path / session_id
+    assert session_dir.exists()
+    
+    # Verify course_input.json was written to the session directory
+    course_input = session_dir / "course_input.json"
+    assert course_input.exists()
+    
+    # Verify run_manifest.json contains the custom session name
+    manifest_file = session_dir / "run_manifest.json"
+    assert manifest_file.exists()
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        manifest_data = json.load(f)
+    assert manifest_data["session_name"] == "Super Custom Session Name 123"
+    assert manifest_data["status"] == "Running"
+
+

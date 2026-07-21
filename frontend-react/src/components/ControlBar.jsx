@@ -14,9 +14,9 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
   const [codeStyle, setCodeStyle]       = useState("none")
   const [expDepth, setExpDepth]         = useState("balanced")
   const [qualityProfile, setQualityProfile] = useState("standard")
-  const [resume, setResume]             = useState(false)
   const [enableSearch, setEnableSearch] = useState(true)
   const [reviewGranularity, setReviewGranularity] = useState("module")
+  const [sessionName, setSessionName] = useState('')
   const fileInputRef            = useRef(null)
 
   useEffect(() => {
@@ -48,13 +48,17 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
       fd.append('code_example_style', codeStyle)
       fd.append('explanation_depth', expDepth)
       fd.append('quality_profile', qualityProfile)
-      fd.append('resume', resume.toString())
+      fd.append('resume', 'false')
       fd.append('enable_google_search', enableSearch.toString())
       fd.append('review_granularity', reviewGranularity)
+      if (sessionName) {
+        fd.append('session_name', sessionName)
+      }
       const res = await fetch('/api/start', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Start failed')
       setFile(null)
+      setSessionName('')
       if (fileInputRef.current) fileInputRef.current.value = ''
       onStarted?.()
     } catch (e) {
@@ -116,8 +120,46 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
               type="file"
               accept=".json"
               className="hidden"
-              onChange={e => { setFile(e.target.files[0]); setError(null) }}
+              onChange={e => {
+                const selectedFile = e.target.files[0];
+                setFile(selectedFile);
+                setError(null);
+                if (selectedFile) {
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    try {
+                      const json = JSON.parse(event.target.result);
+                      const title = json.course_title || json.title || '';
+                      if (title) {
+                        setSessionName(title);
+                      } else {
+                        setSessionName('');
+                      }
+                    } catch (err) {
+                      console.error("Failed to parse JSON for title:", err);
+                      setSessionName('');
+                    }
+                  };
+                  reader.readAsText(selectedFile);
+                } else {
+                  setSessionName('');
+                }
+              }}
             />
+
+            {file && (
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Session Name</label>
+                <input
+                  type="text"
+                  value={sessionName}
+                  onChange={e => setSessionName(e.target.value)}
+                  placeholder="e.g. Intro to Python"
+                  maxLength={100}
+                  className="flex h-8 w-full rounded border border-zinc-800 bg-zinc-900/50 px-3 py-1 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 text-zinc-200"
+                />
+              </div>
+            )}
 
             <div className="flex gap-2 w-full">
               <div className="flex-1 flex flex-col gap-1">
@@ -234,18 +276,6 @@ export function ControlBar({ isRunning, onStarted, onStopped, onCleared }) {
             </div>
 
             <div className="flex flex-col gap-2 mt-1">
-              <div className="flex items-center gap-2">
-                <input
-                  id="resume-checkbox"
-                  type="checkbox"
-                  checked={resume}
-                  onChange={e => setResume(e.target.checked)}
-                  className="rounded border-zinc-800 bg-zinc-900/50 text-zinc-200 focus:ring-zinc-500 h-3.5 w-3.5"
-                />
-                <label htmlFor="resume-checkbox" className="text-xs text-muted-foreground cursor-pointer select-none">
-                  Resume from last incomplete session
-                </label>
-              </div>
               <div className="flex items-center gap-2">
                 <input
                   id="search-checkbox"

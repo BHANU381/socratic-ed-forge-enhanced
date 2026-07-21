@@ -142,7 +142,7 @@ export default function App() {
                 <PipelineMatrix telemetry={telemetry} isActive={activeTab === 'matrix'} />
               </div>
               <div className={`w-full h-full ${activeTab !== 'history' ? 'hidden' : ''}`}>
-                <HistoryDashboard isActive={activeTab === 'history'} />
+                <HistoryDashboard isActive={activeTab === 'history'} setActiveTab={setActiveTab} />
               </div>
             </div>
           </div>
